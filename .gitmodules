@@ -1,14 +1,14 @@
 [submodule "contrib/openmc"]
 	path = contrib/openmc
 	url = https://github.com/magnoxemo/openmc.git
-	branch= external_sources_alias_sampler
+	branch = external_sources_alias_sampler
 [submodule "contrib/nekRS"]
 	path = contrib/nekRS
 	url = https://github.com/neams-th-coe/nekRS.git
 [submodule "contrib/moose"]
 	path = contrib/moose
 	url = git@github.com:magnoxemo/moose.git
-	branch= element_amalgamation
+	branch = element_amalgamation
 [submodule "contrib/SAM"]
 	path = contrib/SAM
 	url = git@gitlab-nse.egs.anl.gov:SAM/SAM.git
