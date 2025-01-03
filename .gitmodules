@@ -1,7 +1,7 @@
 [submodule "contrib/openmc"]
 	path = contrib/openmc
 	url = https://github.com/magnoxemo/openmc.git
-	branch = external_sources_alias_sampler
+	branch = mesh_tally_amlgamation_demo
 [submodule "contrib/nekRS"]
 	path = contrib/nekRS
 	url = https://github.com/neams-th-coe/nekRS.git
