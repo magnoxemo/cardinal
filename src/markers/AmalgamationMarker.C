@@ -47,7 +47,7 @@ AmalgamationMarker::computeQpMarker()
   Loop over the local elements and store the solution in a Real var*/
   Real local_avg;
   Real sum=0;
-  for (qp=0;qp<_qrule->n_points();qp++;)
+  for (unsigned int qp=0;qp<_qrule->n_points();qp++)
     {
         sum=sum+_u_neighbor[qp];
     }
