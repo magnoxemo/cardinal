@@ -231,7 +231,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       libMesh::Elem* elem_ptr = _mesh_filter->get_elem(elem_id);
       if (elem_ptr != nullptr)
       {
-          if (elem_ptr->refinement_flag==Elem::AMALGAMATE)
+          if (elem_ptr->refinement_flag()==Elem::AMALGAMATE)
           {
               Real total_tally_of_the_cluster=tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
               Real total_vol_of_the_cluster= elem_ptr->volume();
