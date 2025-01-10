@@ -234,7 +234,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
           if (elem_ptr->refinement_flag()==Elem::AMALGAMATE)
           {
               Real total_tally_of_the_cluster=tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
-              Real total_vol_of_the_cluster= elem_ptr->volume();
+              Real total_volume_of_the_cluster= elem_ptr->volume();
               const unsigned int n_sides = elem_ptr->n_sides();
               for (unsigned int side_id = 0; side_id < n_sides; ++side_id)
               {
@@ -251,10 +251,6 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
               }
 
               Real power_fraction =elem_ptr->volume()*total_tally_of_the_cluster/total_volume_of_the_cluster;
-              // divide each tally by the volume that it corresponds to in MOOSE
-              // because we will apply it as a volumetric tally (per unit volume).
-              // Because we require that the mesh template has units of cm based on the
-              // mesh constructors in OpenMC, we need to adjust the division
               Real volumetric_power = power_fraction;
               volumetric_power *= norm_by_src_rate
                                       ? _openmc_problem.tallyMultiplier(global_score) /
