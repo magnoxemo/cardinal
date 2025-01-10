@@ -242,7 +242,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                 //avoid amalgamation if a single element is marked for amalgamation
                 if (neighbor_ptr != nullptr)
                 {
-                    if (neighbor_ptr->refinement_flag==Elem::AMALGAMATE)
+                    if (neighbor_ptr->refinement_flag()==Elem::AMALGAMATE)
                     {
                         total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + side_id*e);  //need some clarification on that
                         total_volume_of_the_cluster +=neighbor_ptr->volume();
