@@ -30,15 +30,16 @@ AmalgamationMarker ::validParams()
     "tolerance",
     "user defined tolerance to compare the deviation of the "
     "_u[_qp] from the local average value"
-    "if (abs((_local_avg-_u[_qp])/_local_avg)<tolerance) then AMALGAMATE"
+    "if (abs((_local_avg-_u[_qp])/_local_avg)<tolerance) then AMALGAMATE");
     //To do
     /*introduce _element_age concept*/
 
-AmalgamationMarker ::AmalgamationMarker (const InputParameters & parameters)
-  : QuadraturePointMarker(parameters),
-    _tolerance(getParam<Real>("tolerance"))
+AmalgamationMarker::AmalgamationMarker(const InputParameters& parameters)
+  : QuadraturePointMarker(parameters)
 {
+  _tolerance = getParam<Real>("tolerance");
 }
+
 
 Marker::MarkerValue
 AmalgamationMarker::computeQpMarker()
@@ -61,5 +62,7 @@ AmalgamationMarker::computeQpMarker()
   // Avoid a divide by zero in the comparison metric and just return a do nothing state.
   if ((std::abs((_local_avg-_u[_qp])/_local_avg)<_tolerance)
     return MarkerValue::AMALGAMATE;
+  else
+    return MarkerValue::DO_NOTHING;
 
 }
