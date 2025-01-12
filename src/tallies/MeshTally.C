@@ -238,17 +238,17 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
               const unsigned int n_sides = elem_ptr->n_sides();
               for (unsigned int side_id = 0; side_id < n_sides; ++side_id)
               {
-                const libMesh::Elem* neighbor_ptr = elem_ptr->neighbor(side_id);
+                const libMesh::Elem* neighbor_ptr = elem_ptr->neighbor(side_id); //maybe wrong
                 //avoid amalgamation if a single element is marked for amalgamation
                 if (neighbor_ptr != nullptr)
                 {
                     if (neighbor_ptr->refinement_flag()==Elem::AMALGAMATE)
                     {
-                        total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + side_id*e);  //need some clarification on that
+                        total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + side_id + e);  //need some clarification on that
                         total_volume_of_the_cluster +=neighbor_ptr->volume();
                     }
                 }
-              }
+           }
 
               Real power_fraction =elem_ptr->volume()*total_tally_of_the_cluster/total_volume_of_the_cluster;
               Real volumetric_power = power_fraction;
