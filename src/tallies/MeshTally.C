@@ -229,22 +229,30 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
 
       //check if the element if flagged for amalgamation
       libMesh::Elem* elem_ptr = _mesh_filter->get_elem(elem_id);
+      //openmc::mesh_filter doesn't have anything like get_elem
+      //
       if (elem_ptr != nullptr)
       {
-          if (elem_ptr->refinement_flag()==Elem::AMALGAMATE)
+          if (elem_ptr->refinement_flag()==Marker::AMALGAMATE)
           {
               Real total_tally_of_the_cluster=tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
               Real total_volume_of_the_cluster= elem_ptr->volume();
               const unsigned int n_sides = elem_ptr->n_sides();
               for (unsigned int side_id = 0; side_id < n_sides; ++side_id)
               {
-                const libMesh::Elem* neighbor_ptr = elem_ptr->neighbor(side_id); //maybe wrong
+                const libMesh::Elem* neighbor_ptr = elem_ptr->n_neighbors(side_id); //maybe wrong
                 //avoid amalgamation if a single element is marked for amalgamation
                 if (neighbor_ptr != nullptr)
                 {
-                    if (neighbor_ptr->refinement_flag()==Elem::AMALGAMATE)
+                    if (neighbor_ptr->refinement_flag()==Marker::AMALGAMATE)
                     {
+                        //error Elem::AMALGAMATION not found in libmesh
+                        // so I think the enum should be added to the libmesh?
                         total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + side_id + e);  //need some clarification on that
+                        /*not sure how that thing would work but _mesh_filter must have
+                         an upper bound for the bin index. Doing side_id+e isn't the solution.
+                         maybe (e+/-side_id)/2 . at the start of the vector + end of the vector -
+                         in the middle +/-*/
                         total_volume_of_the_cluster +=neighbor_ptr->volume();
                     }
                 }

@@ -33,11 +33,11 @@ AmalgamationMarker ::validParams()
     "if (abs((_local_avg-_u[_qp])/_local_avg)<tolerance) then AMALGAMATE");
     //To do
     /*introduce _element_age concept*/
-
+  return params;
+}
 AmalgamationMarker::AmalgamationMarker(const InputParameters& parameters)
-  : QuadraturePointMarker(parameters)
+  : QuadraturePointMarker(parameters), _tolerance(parameters.get<Real>("tolerance"))
 {
-  _tolerance = getParam<Real>("tolerance");
 }
 
 
@@ -50,7 +50,7 @@ AmalgamationMarker::computeQpMarker()
   Real sum=0;
   for (unsigned int qp=0;qp<_qrule->n_points();qp++)
     {
-        sum=sum+_u_neighbor[qp];
+        sum=sum+_u[qp];
     }
   // qurle->n_points() should never be zero. But do I need to use if statement to check? 
   local_avg=sum/_qrule->n_points();
