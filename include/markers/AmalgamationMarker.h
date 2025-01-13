@@ -31,7 +31,7 @@ public:
   AmalgamationMarker (const InputParameters & parameters);
 
 protected:
-  virtual MarkerValue computeQpMarker() override;
+   virtual Marker::MarkerValue computeQpMarker() override;
 
   /* user defined tolerance to compare the deviation of the 
     _u[_qp] from the local average value 
