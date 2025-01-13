@@ -228,12 +228,13 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto elem_id = _use_dof_map ? _active_to_total_mapping[e] : mesh_offset + e;
 
       //check if the element if flagged for amalgamation
-      libMesh::Elem* elem_ptr = _mesh_filter->get_elem(elem_id);
+      auto elem_ptr = _mesh.queryElemPtr(elem_id)
+      //error: 'class openmc::MeshFilter' has no member named 'get_elem'
       //openmc::mesh_filter doesn't have anything like get_elem
       //
       if (elem_ptr != nullptr)
       {
-          if (elem_ptr->refinement_flag()==Marker::AMALGAMATE)
+          if (elem_ptr->refinement_flag()==MarkerValue::AMALGAMATE)
           {
               Real total_tally_of_the_cluster=tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
               Real total_volume_of_the_cluster= elem_ptr->volume();
@@ -244,7 +245,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                 //avoid amalgamation if a single element is marked for amalgamation
                 if (neighbor_ptr != nullptr)
                 {
-                    if (neighbor_ptr->refinement_flag()==Marker::AMALGAMATE)
+                    if (neighbor_ptr->refinement_flag()==MarkerValue::AMALGAMATE)
                     {
                         //error Elem::AMALGAMATION not found in libmesh
                         // so I think the enum should be added to the libmesh?
