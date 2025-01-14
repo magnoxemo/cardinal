@@ -147,6 +147,7 @@ MeshTally::spatialFilter()
     if (_use_dof_map)
     {
       _active_to_total_mapping.clear();
+      _total_to_active_mapping.clear(); //clearing the hash map
 
       auto begin = _tally_blocks.size() > 0
                        ? msh->active_subdomain_set_elements_begin(_tally_blocks)
@@ -154,7 +155,10 @@ MeshTally::spatialFilter()
       auto end = _tally_blocks.size() > 0 ? msh->active_subdomain_set_elements_end(_tally_blocks)
                                           : msh->active_elements_end();
       for (const auto & old_elem : libMesh::as_range(begin, end))
+      {
         _active_to_total_mapping.push_back(old_elem->id());
+        _total_to_active_mapping.insert(std::make_pair(old_elem->id(),_active_to_total_mapping.size()-1)); //hash map of the active_to_total
+      }
 
       _active_to_total_mapping.shrink_to_fit();
     }
@@ -248,7 +252,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                     //TODO
 					//I have to do an inverse map which goes from element DoF IDs to tally bin IDs
                     //(a _total_to_active_mapping
-					auto neighbor_bin = _total_to_active[neighbor_ptr->id()];
+					auto neighbor_bin = _total_to_active_mapping[neighbor_ptr->id()];
 					total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + neighbor_bin);
 
                     total_volume_of_the_cluster +=neighbor_ptr->volume();
