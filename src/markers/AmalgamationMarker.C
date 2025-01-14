@@ -49,19 +49,19 @@ AmalgamationMarker::computeQpMarker()
   Real sum=0;
   for (unsigned int qp=0;qp<_qrule->n_points();qp++)
     {
-        sum=sum+_u[qp];
+        sum+=_u_neighbor[qp];
     }
   // qurle->n_points() should never be zero. But do I need to use if statement to check? 
   local_avg=sum/_qrule->n_points();
   //local_avg it could be zero. So ig it needs to be checked 
-  if (local_avg==0)
+  if (std::abs(local_avg)<TOLERANCE)
   {
     return MarkerValue::DO_NOTHING;
   }
   // Avoid a divide by zero in the comparison metric and just return a do nothing state.
   if ((std::abs((local_avg-_u[_qp])/local_avg)<_tolerance))
     return MarkerValue::AMALGAMATE;
-    //showing error in the test. error: 'AMALGAMATE' is not a member of 'Marker::MarkerValue'
+    //solution-> add the AMALGAMATE enum in moose src
   else
     return MarkerValue::DO_NOTHING;
 

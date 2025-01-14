@@ -243,19 +243,16 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
               {
                 const libMesh::Elem* neighbor_ptr = elem_ptr->n_neighbors(side_id); //maybe wrong
                 //avoid amalgamation if a single element is marked for amalgamation
-                if (neighbor_ptr != nullptr)
+                if (neighbor_ptr != nullptr && neighbor_ptr->refinement_flag()==MarkerValue::AMALGAMATE)
                 {
-                    if (neighbor_ptr->refinement_flag()==MarkerValue::AMALGAMATE)
-                    {
-                        //error Elem::AMALGAMATION not found in libmesh
-                        // so I think the enum should be added to the libmesh?
-                        total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + side_id + e);  //need some clarification on that
-                        /*not sure how that thing would work but _mesh_filter must have
-                         an upper bound for the bin index. Doing side_id+e isn't the solution.
-                         maybe (e+/-side_id)/2 . at the start of the vector + end of the vector -
-                         in the middle +/-*/
-                        total_volume_of_the_cluster +=neighbor_ptr->volume();
-                    }
+                    //TODO
+					//I have to do an inverse map which goes from element DoF IDs to tally bin IDs
+                    //(a _total_to_active_mapping
+					auto neighbor_bin = _total_to_active[neighbor_ptr->id()];
+					total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + neighbor_bin);
+
+                    total_volume_of_the_cluster +=neighbor_ptr->volume();
+
                 }
            }
 

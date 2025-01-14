@@ -23,7 +23,6 @@
 
 #include "openmc/tallies/filter_mesh.h"
 
-#include "libmesh/mesh.h"
 namespace libMesh
 {
 class ReplicatedMesh;

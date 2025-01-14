@@ -33,9 +33,8 @@ public:
 protected:
    virtual Marker::MarkerValue computeQpMarker() override;
 
-  /* user defined tolerance to compare the deviation of the 
-    _u[_qp] from the local average value 
-     */
+  /* user defined tolerance to compare the deviation of the _u[_qp] from the local average value */
   const Real _tolerance;
+  const Real TOLERENCE=1E-20; // to check if local_avg isn't zero.
 
 };
