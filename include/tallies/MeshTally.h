@@ -114,5 +114,5 @@ protected:
   std::unique_ptr<libMesh::ReplicatedMesh> _libmesh_mesh_copy;
   /// A mapping between the elements in '_libmesh_mesh_copy' and the elements in the MooseMesh.
   std::vector<unsigned int> _active_to_total_mapping;
-  std::unordered_map<unsigned int, unsigned int>_total_to_active_maping;
+  std::unordered_map<unsigned int, unsigned int>_total_to_active_mapping;
 };
