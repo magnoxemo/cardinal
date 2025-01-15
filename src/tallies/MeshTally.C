@@ -232,7 +232,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto elem_id = _use_dof_map ? _active_to_total_mapping[e] : mesh_offset + e;
 
       //check if the element if flagged for amalgamation
-      auto elem_ptr = _mesh.queryElemPtr(elem_id)
+      auto elem_ptr = _mesh.queryElemPtr(elem_id); 
       //error: 'class openmc::MeshFilter' has no member named 'get_elem'
       //openmc::mesh_filter doesn't have anything like get_elem
       //
