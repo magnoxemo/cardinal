@@ -42,18 +42,18 @@ AmalgamationMarker::AmalgamationMarker(const InputParameters& parameters)
 
 Marker::MarkerValue
 AmalgamationMarker::computeQpMarker()
-{ 
+{
   /* calculate local average value.
   Loop over the local elements and store the solution in a Real var*/
   Real local_avg=0;
   Real sum=0;
   for (unsigned int qp=0;qp<_qrule->n_points();qp++)
     {
-        sum+=_u_neighbor[qp];
+        sum+=_u[qp];
     }
-  // qurle->n_points() should never be zero. But do I need to use if statement to check? 
+  // qurle->n_points() should never be zero. But do I need to use if statement to check?
   local_avg=sum/_qrule->n_points();
-  //local_avg it could be zero. So ig it needs to be checked 
+  //local_avg it could be zero. So ig it needs to be checked
   if (std::abs(local_avg)<TOLERANCE)
   {
     return MarkerValue::DO_NOTHING;

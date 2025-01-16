@@ -17,8 +17,8 @@
 /********************************************************************/
 
 #ifdef ENABLE_OPENMC_COUPLING
-#include "MeshTally.h"
 
+#include "MeshTally.h"
 #include "libmesh/replicated_mesh.h"
 
 registerMooseObject("CardinalApp", MeshTally);
@@ -232,28 +232,28 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto elem_id = _use_dof_map ? _active_to_total_mapping[e] : mesh_offset + e;
 
       //check if the element if flagged for amalgamation
-      auto elem_ptr = _mesh.queryElemPtr(elem_id); 
+      auto elem_ptr = _mesh.queryElemPtr(elem_id);
       //error: 'class openmc::MeshFilter' has no member named 'get_elem'
       //openmc::mesh_filter doesn't have anything like get_elem
       //
       if (elem_ptr != nullptr)
       {
-          if (elem_ptr->refinement_flag()==MarkerValue::AMALGAMATE)
+          if (elem_ptr->refinement_flag()== Marker::MarkerValue::DO_NOTHING)
           {
               Real total_tally_of_the_cluster=tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
               Real total_volume_of_the_cluster= elem_ptr->volume();
               const unsigned int n_sides = elem_ptr->n_sides();
               for (unsigned int side_id = 0; side_id < n_sides; ++side_id)
               {
-                const libMesh::Elem* neighbor_ptr = elem_ptr->n_neighbors(side_id); //maybe wrong
+                auto neighbor_ptr = elem_ptr->neighbor_ptr(side_id); //maybe wrong
                 //avoid amalgamation if a single element is marked for amalgamation
-                if (neighbor_ptr != nullptr && neighbor_ptr->refinement_flag()==MarkerValue::AMALGAMATE)
+                if (neighbor_ptr != nullptr && neighbor_ptr->refinement_flag()== Marker::MarkerValue::DO_NOTHING)
                 {
                     //TODO
 					//I have to do an inverse map which goes from element DoF IDs to tally bin IDs
                     //(a _total_to_active_mapping
-					auto neighbor_bin = _total_to_active_mapping[neighbor_ptr->id()];
-					total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + neighbor_bin);
+		    		auto neighbor_bin = _total_to_active_mapping[neighbor_ptr->id()];
+		    		total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + neighbor_bin);
 
                     total_volume_of_the_cluster +=neighbor_ptr->volume();
 
