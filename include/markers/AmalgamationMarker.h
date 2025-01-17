@@ -21,20 +21,20 @@
 #include "QuadraturePointMarker.h"
 
 /**
- * A marker which takes a given variable and checks if it is within a certain range of the extrme value.
+ * A marker which takes a given variable and checks if it is within a certain range of the extrme
+ * value.
  */
 class AmalgamationMarker : public QuadraturePointMarker
 {
 public:
   static InputParameters validParams();
 
-  AmalgamationMarker (const InputParameters & parameters);
+  AmalgamationMarker(const InputParameters & parameters);
 
 protected:
-   virtual Marker::MarkerValue computeQpMarker() override;
+  virtual Marker::MarkerValue computeQpMarker() override;
 
   /* user defined tolerance to compare the deviation of the _u[_qp] from the local average value */
   const Real _tolerance;
-  const Real TOLERENCE=1E-20; // to check if local_avg isn't zero.
-
+  const Real TOLERENCE = 1E-20; // to check if local_avg isn't zero.
 };

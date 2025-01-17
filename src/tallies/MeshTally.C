@@ -147,7 +147,7 @@ MeshTally::spatialFilter()
     if (_use_dof_map)
     {
       _active_to_total_mapping.clear();
-      _total_to_active_mapping.clear(); //clearing the hash map
+      _total_to_active_mapping.clear(); // clearing the hash map
 
       auto begin = _tally_blocks.size() > 0
                        ? msh->active_subdomain_set_elements_begin(_tally_blocks)
@@ -157,7 +157,9 @@ MeshTally::spatialFilter()
       for (const auto & old_elem : libMesh::as_range(begin, end))
       {
         _active_to_total_mapping.push_back(old_elem->id());
-        _total_to_active_mapping.insert(std::make_pair(old_elem->id(),_active_to_total_mapping.size()-1)); //hash map of the active_to_total
+        _total_to_active_mapping.insert(
+            std::make_pair(old_elem->id(),
+                           _active_to_total_mapping.size() - 1)); // hash map of the active_to_total
       }
 
       _active_to_total_mapping.shrink_to_fit();
@@ -231,74 +233,76 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
       auto elem_id = _use_dof_map ? _active_to_total_mapping[e] : mesh_offset + e;
 
-      //check if the element if flagged for amalgamation
+      // check if the element if flagged for amalgamation
       auto elem_ptr = _mesh.queryElemPtr(elem_id);
-      //error: 'class openmc::MeshFilter' has no member named 'get_elem'
-      //openmc::mesh_filter doesn't have anything like get_elem
+      // error: 'class openmc::MeshFilter' has no member named 'get_elem'
+      // openmc::mesh_filter doesn't have anything like get_elem
       //
       if (elem_ptr != nullptr)
       {
-          if (elem_ptr->refinement_flag()== Marker::MarkerValue::DO_NOTHING)
+        if (elem_ptr->refinement_flag() == Marker::MarkerValue::DO_NOTHING)
+        {
+          Real total_tally_of_the_cluster =
+              tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
+          Real total_volume_of_the_cluster = elem_ptr->volume();
+          const unsigned int n_sides = elem_ptr->n_sides();
+          for (unsigned int side_id = 0; side_id < n_sides; ++side_id)
           {
-              Real total_tally_of_the_cluster=tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
-              Real total_volume_of_the_cluster= elem_ptr->volume();
-              const unsigned int n_sides = elem_ptr->n_sides();
-              for (unsigned int side_id = 0; side_id < n_sides; ++side_id)
-              {
-                auto neighbor_ptr = elem_ptr->neighbor_ptr(side_id); //maybe wrong
-                //avoid amalgamation if a single element is marked for amalgamation
-                if (neighbor_ptr != nullptr && neighbor_ptr->refinement_flag()== Marker::MarkerValue::DO_NOTHING)
-                {
-                    //TODO
-					//I have to do an inverse map which goes from element DoF IDs to tally bin IDs
-                    //(a _total_to_active_mapping
-		    		auto neighbor_bin = _total_to_active_mapping[neighbor_ptr->id()];
-		    		total_tally_of_the_cluster += tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + neighbor_bin);
+            auto neighbor_ptr = elem_ptr->neighbor_ptr(side_id); // maybe wrong
+            // avoid amalgamation if a single element is marked for amalgamation
+            if (neighbor_ptr != nullptr &&
+                neighbor_ptr->refinement_flag() == Marker::MarkerValue::DO_NOTHING)
+            {
+              // TODO
+              // I have to do an inverse map which goes from element DoF IDs to tally bin IDs
+              //(a _total_to_active_mapping
+              auto neighbor_bin = _total_to_active_mapping[neighbor_ptr->id()];
+              total_tally_of_the_cluster +=
+                  tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + neighbor_bin);
 
-                    total_volume_of_the_cluster +=neighbor_ptr->volume();
-
-                }
-           }
-
-              Real power_fraction =elem_ptr->volume()*total_tally_of_the_cluster/total_volume_of_the_cluster;
-              Real volumetric_power = power_fraction;
-              volumetric_power *= norm_by_src_rate
-                                      ? _openmc_problem.tallyMultiplier(global_score) /
-                                            _mesh_template->volume(e) * _openmc_problem.scaling() *
-                                            _openmc_problem.scaling() * _openmc_problem.scaling()
-                                      : 1.0;
-              total += power_fraction;
-
-
-              //define that elem_id earlier and then try to check if that element was flagged for amalgamation
-              //if yes then recalculate the volumetric avg of the bin value and std of the cluster
-              //
-              fillElementalAuxVariable(var, {elem_id}, volumetric_power);
+              total_volume_of_the_cluster += neighbor_ptr->volume();
+            }
           }
-          else
-          {
-            Real power_fraction = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
 
-            // divide each tally by the volume that it corresponds to in MOOSE
-            // because we will apply it as a volumetric tally (per unit volume).
-            // Because we require that the mesh template has units of cm based on the
-            // mesh constructors in OpenMC, we need to adjust the division
-            Real volumetric_power = power_fraction;
-            volumetric_power *= norm_by_src_rate
-                                    ? _openmc_problem.tallyMultiplier(global_score) /
-                                          _mesh_template->volume(e) * _openmc_problem.scaling() *
-                                          _openmc_problem.scaling() * _openmc_problem.scaling()
-                                    : 1.0;
-            total += power_fraction;
+          Real power_fraction =
+              elem_ptr->volume() * total_tally_of_the_cluster / total_volume_of_the_cluster;
+          Real volumetric_power = power_fraction;
+          volumetric_power *= norm_by_src_rate
+                                  ? _openmc_problem.tallyMultiplier(global_score) /
+                                        _mesh_template->volume(e) * _openmc_problem.scaling() *
+                                        _openmc_problem.scaling() * _openmc_problem.scaling()
+                                  : 1.0;
+          total += power_fraction;
 
+          // define that elem_id earlier and then try to check if that element was flagged for
+          // amalgamation if yes then recalculate the volumetric avg of the bin value and std of the
+          // cluster
+          //
+          fillElementalAuxVariable(var, {elem_id}, volumetric_power);
+        }
+        else
+        {
+          Real power_fraction = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
 
-            //define that elem_id earlier and then try to check if that element was flagged for amalgamation
-            //if yes then recalculate the volumetric avg of the bin value and std of the cluster
-            //
-            fillElementalAuxVariable(var, {elem_id}, volumetric_power);
-          }
+          // divide each tally by the volume that it corresponds to in MOOSE
+          // because we will apply it as a volumetric tally (per unit volume).
+          // Because we require that the mesh template has units of cm based on the
+          // mesh constructors in OpenMC, we need to adjust the division
+          Real volumetric_power = power_fraction;
+          volumetric_power *= norm_by_src_rate
+                                  ? _openmc_problem.tallyMultiplier(global_score) /
+                                        _mesh_template->volume(e) * _openmc_problem.scaling() *
+                                        _openmc_problem.scaling() * _openmc_problem.scaling()
+                                  : 1.0;
+          total += power_fraction;
+
+          // define that elem_id earlier and then try to check if that element was flagged for
+          // amalgamation if yes then recalculate the volumetric avg of the bin value and std of the
+          // cluster
+          //
+          fillElementalAuxVariable(var, {elem_id}, volumetric_power);
+        }
       }
-
     }
   }
   return total;
