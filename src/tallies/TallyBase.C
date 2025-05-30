@@ -54,7 +54,7 @@ TallyBase::validParams()
   params.addRangeCheckedParam<std::vector<Real>>(
       "trigger_threshold", "trigger_threshold > 0", "Threshold for the tally trigger");
   params.addParam<std::vector<bool>>(
-      "trigger_ignore_zeros",
+      "trigger_inorm_by_src_rategnore_zeros",
       {false},
       "Whether tally bins with zero scores are ignored when computing the tally trigger. If only "
       "one "
