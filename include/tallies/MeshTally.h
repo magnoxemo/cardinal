@@ -121,5 +121,6 @@ protected:
     std::unordered_map<unsigned int, unsigned int>_element_to_bin_mapping;
     /// Mesh tally amalgamation in the post processing
     bool _mesh_tally_amalgamation_post_processing;
+    int _not_in_a_cluster = -1;
 
 };
