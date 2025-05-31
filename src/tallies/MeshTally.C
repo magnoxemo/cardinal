@@ -265,8 +265,6 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
     auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
     for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
     {
-      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
-      libMesh::Elem * element_ptr = _mesh.queryElemPtr(elem_id);
       // divide each tally by the volume that it corresponds to in MOOSE
       // because we will apply it as a volumetric tally (per unit volume).
       // Because we require that the mesh template has units of cm based on the
@@ -280,6 +278,9 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                                  _openmc_problem.scaling() * _openmc_problem.scaling())
                               : 1.0;
 
+      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+      libMesh::Elem * element_ptr = _mesh.queryElemPtr(elem_id);
+
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
       fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
 
@@ -287,23 +288,25 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
           element_ptr &&
           element_ptr->active() &&
           element_ptr->get_extra_integer(_extra_integer_index)!=_not_in_a_cluster){
+
           unsigned int cluster_id = element_ptr->get_extra_integer(_extra_integer_index);
           amalgamation_volume [cluster_id] +=element_ptr->volume();
-          amalgamation_score [cluster_id] += norm_by_src_rate? volumetric_tally: volumetric_tally*element_ptr->volume();
+          amalgamation_score [cluster_id] += volumetric_tally;
       }
     }
+    if (_mesh_tally_amalgamation_post_processing){
+      for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
+      {
+        auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+        libMesh::Elem * element_ptr = _mesh.queryElemPtr(elem_id);
 
-    for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
-    {
-      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
-      libMesh::Elem * element_ptr = _mesh.queryElemPtr(elem_id);
+        if (element_ptr &&
+            element_ptr->active() &&
+            element_ptr->get_extra_integer(_extra_integer_index)!=_not_in_a_cluster){
 
-      if (_mesh_tally_amalgamation_post_processing &&
-          element_ptr &&
-          element_ptr->active() &&
-          element_ptr->get_extra_integer(_extra_integer_index)!=_not_in_a_cluster){
-        unsigned int cluster_id = element_ptr->get_extra_integer(_extra_integer_index);
-        fillElementalAuxVariable(var, {elem_id}, amalgamation_score[cluster_id]/amalgamation_volume[cluster_id]);
+          unsigned int cluster_id = element_ptr->get_extra_integer(_extra_integer_index);
+          fillElementalAuxVariable(var, {elem_id}, amalgamation_score[cluster_id]/amalgamation_volume[cluster_id]);
+        }
       }
     }
 
