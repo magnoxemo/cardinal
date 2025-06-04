@@ -33,6 +33,8 @@ ClusteringUserObject::ClusteringUserObject(const InputParameters & parameters)
                  " generator defines it with extra_element_integers.");
     _mesh.add_elem_integer(_id_name);
   }
+  if (_metric_variable.feType()!=FEType(CONSTANT, MONOMIAL))
+    mooseError("Variable must be type of CONSTANT MONOMIAL");
   _extra_integer_index = _mesh.get_elem_integer_index(_id_name);
 }
 

@@ -25,7 +25,7 @@ protected:
   const ExtraElementIDName _id_name;
   libMesh::MeshBase & _mesh;
   const AuxVariableName _metric_variable_name;
-  MooseVariableFEBase & _metric_variable;
+  MooseVariableBase & _metric_variable;
   AuxiliarySystem & _auxiliary_system;
   libMesh::DofMap & _dof_map;
   unsigned int _metric_variable_index;
