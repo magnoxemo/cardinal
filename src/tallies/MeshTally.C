@@ -282,34 +282,20 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       libMesh::Elem * element_ptr = _mesh.queryElemPtr(elem_id);
 
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
-      fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
-
       if (_mesh_tally_amalgamation_post_processing &&
           element_ptr &&
           element_ptr->active() &&
           element_ptr->get_extra_integer(_extra_integer_index)!=_not_in_a_cluster){
-
-          unsigned int cluster_id = element_ptr->get_extra_integer(_extra_integer_index);
-          amalgamation_volume [cluster_id] +=element_ptr->volume();
-          amalgamation_score [cluster_id] += volumetric_tally;
+        elem_id = element_ptr->get_extra_integer(_extra_integer_index);
       }
+      amalgamation_volume[elem_id] +=element_ptr->volume();
+      amalgamation_score[elem_id] += element_ptr->volume()*volumetric_tally;
     }
-    if (_mesh_tally_amalgamation_post_processing){
-      for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
-      {
-        auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
-        libMesh::Elem * element_ptr = _mesh.queryElemPtr(elem_id);
-
-        if (element_ptr &&
-            element_ptr->active() &&
-            element_ptr->get_extra_integer(_extra_integer_index)!=_not_in_a_cluster){
-
-          unsigned int cluster_id = element_ptr->get_extra_integer(_extra_integer_index);
-          fillElementalAuxVariable(var, {elem_id}, amalgamation_score[cluster_id]/amalgamation_volume[cluster_id]);
-        }
-      }
+    for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
+    {
+      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+      fillElementalAuxVariable(var, {elem_id}, amalgamation_score[elem_id]/amalgamation_volume[elem_id]);
     }
-
   }
 
   return total;
