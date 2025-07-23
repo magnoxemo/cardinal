@@ -8,9 +8,10 @@ public:
   static InputParameters validParams();
   ValueRangeHeuristicUserObject(const InputParameters & params);
 
-protected:
   ///method for evaluting if element should be clusterd or not
   virtual bool evaluate(libMesh::Elem * base_element, libMesh::Elem * neighbor_elem) const override;
+
+protected:
 
   const Real _tolerance_percentage;
   Real _value;
