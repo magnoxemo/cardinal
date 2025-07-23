@@ -6,10 +6,10 @@
 It implements the clustering heuristic if the scores of two adjacent
 elements are both with in a range. The range is calculated as
 
-$$S_{lower} = (1-tol) \times Value $$
-$$S_{upper} = (1+tol) \times Value $$
+$$S_{lower} = (1-tol) \times value $$
+$$S_{upper} = (1+tol) \times value $$
 
-where $Value$ and $tol$ are user provided inputs.
+where `value` and `_tolerance_percentage`  are user provided inputs.
 
 
 !alert! warning

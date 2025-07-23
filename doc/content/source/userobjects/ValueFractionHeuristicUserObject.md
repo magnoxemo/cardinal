@@ -7,8 +7,7 @@ It implements the clustering heuristic if the scores of two adjacent
 elements are both either more/less than a upper/lower cut off of the metric variable.
 The upper and lower cut off is calculated is calculated as
 
-upper_cut_off $= (1 -$ upper_fraction $)$ $ \times S_{max}$
-
+upper_cut_off $= (1 -$ upper_fraction $)$ $ \times (S_{max} - S_{min}) + S_{min}$ $
 lower_cut_off $= $ lower_fraction $ \times (S_{max} - S_{min}) + S_{min}$
 
 where `upper_fraction` and `lower_fraction` are user defined input parameters and $S_{max}$ and

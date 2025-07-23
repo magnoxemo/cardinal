@@ -48,31 +48,21 @@ Dim = 2
 []
 
 [UserObjects]
-  [threhsold]
-    type = ThresholdHeuristicsUserObject
-    metric_variable_name = 'metric_var'
-    threshold = 1.1
-  []
-  [value_diff]
-    type = ValueDifferenceHeuristicUserObject
-    metric_variable_name = 'metric_var'
-    tolerance = 0.001
-  []
-  [value_range]
+  [value_range_1]
     type = ValueRangeHeuristicUserObject
     metric_variable_name = 'metric_var'
     tolerance_percentage = 0.2
     value = 1
   []
-  [value_fraction]
-    type = ValueFractionHeuristicUserObject
+  [value_range_2]
+    type = ValueRangeHeuristicUserObject
     metric_variable_name = 'metric_var'
-    upper_fraction = 0.2
-    lower_fraction = 0.1
+    tolerance_percentage = 0.4
+    value = 4
   []
   [boolean_combo]
     type = BooleanComboHeuristicUserObejct
-    expression = "( threhsold and value_diff ) or ( value_range and value_fraction )"
+    expression = "( value_range_2 or value_range_1)"
     id_name = "boolean"
   []
 []

@@ -38,7 +38,7 @@ ValueFractionHeuristicUserObject::extremesFinder()
       _min = score;
     }
   }
-  _upper_cut_off = (1 - _upper_fraction) * _max;
+  _upper_cut_off = (1 - _upper_fraction) * (_max - _min) + _min;
   _lower_cut_off = _lower_fraction * (_max - _min) + _min;
 }
 bool
