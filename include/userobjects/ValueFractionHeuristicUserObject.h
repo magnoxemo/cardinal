@@ -11,15 +11,12 @@ public:
 
 protected:
   /// method for evaluting if element should be clusterd or not
-  virtual bool evaluate(libMesh::Elem * base_element,
-                                libMesh::Elem * neighbor_elem) const override;
+  virtual bool evaluate(libMesh::Elem * base_element, libMesh::Elem * neighbor_elem) const override;
 
   /// maximum and minmum value finder
   void extremesFinder();
 
-  virtual void execute() override {
-    extremesFinder();
-  };
+  virtual void execute() override { extremesFinder(); };
 
   /// upper fraction of the metric value
   Real _upper_fraction;

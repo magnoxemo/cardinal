@@ -6,10 +6,13 @@ ValueRangeHeuristicUserObject::validParams()
 {
 
   InputParameters params = ClusteringHeuristicUserObjectBase::validParams();
-  params.addRequiredParam<Real>("tolerance_percentage", "Fractional tolerance used to define"
-                                                        " the acceptable range around the reference value.");
-  params.addRequiredParam<Real>("value", "The reference value to decide if an element is close enough to be clustered");
-  params.addClassDescription("Clusters elements if their score is within the tolerance of the value provided.");
+  params.addRequiredParam<Real>("tolerance_percentage",
+                                "Fractional tolerance used to define"
+                                " the acceptable range around the reference value.");
+  params.addRequiredParam<Real>(
+      "value", "The reference value to decide if an element is close enough to be clustered");
+  params.addClassDescription(
+      "Clusters elements if their score is within the tolerance of the value provided.");
 
   return params;
 }
@@ -32,7 +35,7 @@ ValueRangeHeuristicUserObject::isInsideTheRange(libMesh::Elem * element) const
 bool
 
 ValueRangeHeuristicUserObject::evaluate(libMesh::Elem * base_element,
-                                                libMesh::Elem * neighbor_element) const
+                                        libMesh::Elem * neighbor_element) const
 {
 
   return isInsideTheRange(base_element) and isInsideTheRange(neighbor_element);

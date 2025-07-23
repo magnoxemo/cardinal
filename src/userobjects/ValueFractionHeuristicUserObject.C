@@ -43,7 +43,7 @@ ValueFractionHeuristicUserObject::extremesFinder()
 }
 bool
 ValueFractionHeuristicUserObject::evaluate(libMesh::Elem * base_element,
-                                                   libMesh::Elem * neighbor_element) const
+                                           libMesh::Elem * neighbor_element) const
 {
 
   Real base_score = getMetricData(base_element);
