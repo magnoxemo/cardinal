@@ -36,6 +36,11 @@ DiscrepancyAux::computeValue()
   // The value to output
   Real base_variable_value = getBaseVariableValueByElement(_current_elem);
   Real mesh_amalgamation_output = _solution_object.pointValue(_t, _current_elem->vertex_average(),_from_variable_name );
+
+  /* TO DO
+   * We need to explore different interpolation strategies rather than point projection
+   *
+   */
   /*our main investigation will be how that point value get projected*/
 
   return (base_variable_value - mesh_amalgamation_output)/base_variable_value ;
