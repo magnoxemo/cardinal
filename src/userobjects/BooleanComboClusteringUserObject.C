@@ -3,6 +3,14 @@
 
 registerMooseObject("CardinalApp", BooleanComboClusteringUserObject);
 
+std::unordered_map<std::string, int> BooleanComboClusteringUserObject::_precedence {
+    {"not", 3}, {"!", 3}, {"and", 2}, {"&&", 2}, {"or", 1}, {"||", 1}
+};
+
+const std::string BooleanComboClusteringUserObject::_left_parenthesis = "(";
+const std::string BooleanComboClusteringUserObject::_right_parenthesis = ")";
+
+
 InputParameters
 BooleanComboClusteringUserObject::validParams()
 {
@@ -38,7 +46,7 @@ BooleanComboClusteringUserObject::initializeUserObjects()
   _clustering_user_objects.clear();
   for (const auto & token : _output_stack)
   {
-    if (_precedence.find(token))
+    if (_precedence.count(token))
       //seperate the user object names. If true that means name is an operator
       continue;
     const auto & uo = getUserObjectByName<ClusteringHeuristicUserObjectBase>(token);

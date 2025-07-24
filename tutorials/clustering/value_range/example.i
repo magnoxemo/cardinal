@@ -17,7 +17,7 @@ Dim = 2
     x_max = ${x_right}
     y_min = ${y_bottom}
     y_max = ${y_up}
-    extra_element_integers = 'threshold_heuristic'
+    extra_element_integers = 'boolean'
   []
 []
 
@@ -41,29 +41,29 @@ Dim = 2
   []
   [store_element_id]
     type=ExtraElementIDAux
-    extra_id_name ="threshold_heuristic"
+    extra_id_name ="boolean"
     execute_on = 'TIMESTEP_BEGIN'
     variable=cluster_id_aux
   []
 []
 
 [UserObjects]
-  [threhsold_1]
-    type = ThresholdHeuristicsUserObject
+  [value_range_1]
+    type = ValueRangeHeuristicUserObject
     metric_variable_name = 'metric_var'
-    threshold = 1.1
+    tolerance_percentage = 0.2
+    value = 1
   []
-  [threhsold_2]
-    type = ThresholdHeuristicsUserObject
+  [value_range_2]
+    type = ValueRangeHeuristicUserObject
     metric_variable_name = 'metric_var'
-    threshold = 1.4
-    cluster_if_above_threshold = false
+    tolerance_percentage = 0.4
+    value = 4
   []
-
   [boolean_combo]
     type = BooleanComboClusteringUserObject
-    expression = "( threhsold_1 and threhsold_2 )"
-    id_name = "threshold_heuristic"
+    expression = "( value_range_2 or value_range_1 )"
+    id_name = "boolean"
   []
 []
 
