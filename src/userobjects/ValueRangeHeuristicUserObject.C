@@ -1,6 +1,7 @@
 #include "ValueRangeHeuristicUserObject.h"
 
 registerMooseObject("CardinalApp", ValueRangeHeuristicUserObject);
+
 InputParameters
 ValueRangeHeuristicUserObject::validParams()
 {
@@ -32,11 +33,10 @@ ValueRangeHeuristicUserObject::isInsideTheRange(libMesh::Elem * element) const
   Real score = getMetricData(element);
   return _lower_limit < score and score < _upper_limit;
 }
-bool
 
+bool
 ValueRangeHeuristicUserObject::evaluate(libMesh::Elem * base_element,
                                         libMesh::Elem * neighbor_element) const
 {
-
   return isInsideTheRange(base_element) and isInsideTheRange(neighbor_element);
 }

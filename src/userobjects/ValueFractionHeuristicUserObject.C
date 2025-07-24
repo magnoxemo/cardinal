@@ -17,30 +17,25 @@ ValueFractionHeuristicUserObject::ValueFractionHeuristicUserObject(const InputPa
   : ClusteringHeuristicUserObjectBase(params),
     _upper_fraction(getParam<Real>("upper_fraction")),
     _lower_fraction(getParam<Real>("lower_fraction")),
-    _max(std::numeric_limits<Real>::max()),
-    _min(std::numeric_limits<Real>::min())
+    _max(std::numeric_limits<Real>::min()),
+    _min(std::numeric_limits<Real>::max())
 {
 }
 
 void
 ValueFractionHeuristicUserObject::extremesFinder()
 {
-  double score;
+
   for (auto & elem : _mesh.active_element_ptr_range())
   {
-    score = getMetricData(elem);
-    if (_max < score)
-    {
-      _max = score;
-    }
-    if (_min > score)
-    {
-      _min = score;
-    }
+    auto score = getMetricData(elem);
+    _max = std::max(_max, score);
+    _min = std::min(_min, score);
   }
   _upper_cut_off = (1 - _upper_fraction) * (_max - _min) + _min;
   _lower_cut_off = _lower_fraction * (_max - _min) + _min;
 }
+
 bool
 ValueFractionHeuristicUserObject::evaluate(libMesh::Elem * base_element,
                                            libMesh::Elem * neighbor_element) const

@@ -3,6 +3,14 @@
 
 registerMooseObject("CardinalApp", BooleanComboClusteringUserObject);
 
+std::unordered_map<std::string, int> BooleanComboClusteringUserObject::_precedence {
+    {"not", 3}, {"!", 3}, {"and", 2}, {"&&", 2}, {"or", 1}, {"||", 1}
+};
+
+const std::string BooleanComboClusteringUserObject::_left_parenthesis = "(";
+const std::string BooleanComboClusteringUserObject::_right_parenthesis = ")";
+
+
 InputParameters
 BooleanComboClusteringUserObject::validParams()
 {

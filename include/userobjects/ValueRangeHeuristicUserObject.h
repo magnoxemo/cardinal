@@ -13,10 +13,10 @@ public:
 
 protected:
 
-  const Real _tolerance_percentage;
+  Real _tolerance_percentage;
   Real _value;
-  const Real _upper_limit;
-  const Real _lower_limit;
+  Real _upper_limit;
+  Real _lower_limit;
 
 private:
   ///determines if the score is with the range (_lower_limit, _upper_limit)
