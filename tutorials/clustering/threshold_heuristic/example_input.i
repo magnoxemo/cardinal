@@ -61,7 +61,7 @@ Dim = 2
   []
 
   [boolean_combo]
-    type = BooleanComboHeuristicUserObejct
+    type = BooleanComboClusteringUserObject
     expression = "( threhsold_1 and threhsold_2 )"
     id_name = "threshold_heuristic"
   []

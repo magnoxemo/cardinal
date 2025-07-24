@@ -55,7 +55,7 @@ Dim = 2
     lower_fraction = 0.1
   []
   [boolean_combo]
-    type = BooleanComboHeuristicUserObejct
+    type = BooleanComboClusteringUserObject
     expression = "value_fraction"
     id_name = "extreme_value"
   []

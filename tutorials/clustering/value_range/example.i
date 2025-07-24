@@ -61,7 +61,7 @@ Dim = 2
     value = 4
   []
   [boolean_combo]
-    type = BooleanComboHeuristicUserObejct
+    type = BooleanComboClusteringUserObject
     expression = "( value_range_2 or value_range_1 )"
     id_name = "boolean"
   []

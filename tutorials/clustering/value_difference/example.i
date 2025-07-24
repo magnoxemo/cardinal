@@ -54,7 +54,7 @@ Dim = 2
     tolerance = 0.001
   []
   [boolean_combo]
-    type = BooleanComboHeuristicUserObejct
+    type = BooleanComboClusteringUserObject
     expression = "value_diff"
     id_name = "equal_value"
   []
