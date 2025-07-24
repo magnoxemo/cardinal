@@ -2,33 +2,31 @@
 #include "MooseError.h"
 #include "SolutionUserObjectBase.h"
 
-registerMooseObject("DiscrepencyAux", CardinalApp);
+registerMooseObject("CardinalApp", DiscrepancyAux);
 
 InputParameters
-DiscrepencyAux::validParams(){
+DiscrepancyAux::validParams(){
   InputParameters params = AuxKernel::validParams();
   params.addRequiredParam<VariableName>("base_variable_name","name of the variable which's relative"
                                                               " difference will be calculated");
-  params.addClassDescription("calculates the relative difference between two solution field.");
   params.addRequiredParam<UserObjectName>("solution", "The name of the SolutionUserObject");
   params.addParam<std::string>("from_variable","The name of the variable to extract from the file");
+
+  params.addClassDescription("calculates the relative difference between two solution field.");
+
   return params;
 }
 
-DiscrepencyAux::DiscrepencyAux(const InputParameters & parameters)
+DiscrepancyAux::DiscrepancyAux(const InputParameters & parameters)
   : AuxKernel(parameters),
+    MooseVariableInterFace<Real>(this, false, "base_variable_name")
     _solution_object(getUserObject<SolutionUserObjectBase>("solution")),
-    _base_variable_name(getParam<AuxVariableName>("metric_variable_name")),
-    _base_variable(_fe_problem.getVariable(_tid, _base_variable_name)),
-    _auxiliary_system(_fe_problem.getAuxiliarySystem()),
-    _dof_map(_auxiliary_system.dofMap()),
-    _base_variable_index(_auxiliary_system.getVariable(_tid, _base_variable_name).number())
 
 {
 }
 
 void
-DiscrepencyAux::initialSetup()
+DiscrepancyAux::initialSetup()
 {
   // If 'from_variable' is supplied, use the value
   if (isParamValid("from_variable"))
@@ -49,15 +47,4 @@ DiscrepencyAux::computeValue()
   /*our main investigation will be how that point value get projected*/
 
   return (base_variable_value - mesh_amalgamation_output)/base_variable_value ;
-}
-
-Real
-DiscrepencyAux::getBaseVariableValueByElement(const libMesh::Elem * elem) const
-{
-  std::vector<libMesh::dof_id_type> dof_indices;
-  std::vector<double> solution_value(1);
-  _dof_map.dof_indices(elem, dof_indices, _metric_variable_index);
-  _auxiliary_system.solution().get(dof_indices, solution_value);
-
-  return solution_value[0];
 }

@@ -1,9 +1,10 @@
 #pragma once
 #include "AuxKernel.h"
+#include "MooseVariableInterFace.h"
 //forward declaration
 class SolutionUserObjectBase;
 
-class DiscrepencyAux : public AuxKernel
+class DiscrepencyAux : public AuxKernel, public MooseVariableInterface<Real>
 {
 public:
   static InputParameters validParams();
@@ -18,21 +19,12 @@ protected:
   /// Reference to the SolutionUserObject storing the solution
   const SolutionUserObjectBase & _solution_object;
 
-  Real getBaseVariableValueByElement(libMesh::Elem* element) const;
+  //base variable value
+  const VariableValue & _base_variable_value;
+
 
   /// The variable name of interest
   std::string _mesh_amalgamation_var_name;
 
-  AuxVariableName & _base_variable_name;
-  MooseVariableBase &  _base_variable;
-
-  ///AuxiliarySystem reference
-  AuxiliarySystem & _auxiliary_system;
-
-  ///DOF map
-  libMesh::DofMap & _dof_map;
-
-  ///Metric variable index
-  const unsigned int _base_variable_index;
 
 };
