@@ -40,16 +40,9 @@ MeshTally::validParams()
       "blocks",
       "Subdomains for which to add tallies in OpenMC. If not provided, this mesh "
       "tally will be applied over the entire mesh.");
-  params.addParam<bool>("mesh_tally_amalgamation_post_processing",
-                        false,
-                        "if we need to do mesh amalgamation "
-                        "in the post processing or not");
+
   // The index of this tally into an array of mesh translations. Defaults to zero.
   params.addPrivateParam<unsigned int>("instance", 0);
-  params.addParam<std::string>("extra_integer_name",
-                               "nothing",
-                               "name of the extra integer id which"
-                               "will be used for amalgamation");
 
   return params;
 }
@@ -183,12 +176,19 @@ MeshTally::spatialFilter()
       _libmesh_mesh_copy->allow_renumbering(false);
       _libmesh_mesh_copy->prepare_for_use();
 
-      openmc::model::meshes.emplace_back(
-          std::make_unique<openmc::LibMesh>(*_libmesh_mesh_copy.get(), _openmc_problem.scaling()));
+
+      if (_mesh_tally_amalgamation_post_processing)
+        openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*_libmesh_mesh_copy.get(), _extra_integer_name, _openmc_problem.scaling()));
+      else
+        openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*_libmesh_mesh_copy.get(), _openmc_problem.scaling()));
     }
-    else
-      openmc::model::meshes.emplace_back(
-          std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _openmc_problem.scaling()));
+    else{
+      if (_mesh_tally_amalgamation_post_processing)
+        openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _extra_integer_name, _openmc_problem.scaling()));
+      else
+        openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _openmc_problem.scaling()));
+
+    }
   }
   else
     openmc::model::meshes.emplace_back(
@@ -219,7 +219,6 @@ MeshTally::resetTally()
   // Erase the OpenMC mesh.
   openmc::model::meshes.erase(openmc::model::meshes.begin() + _mesh_index);
 }
-
 Real
 MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                              unsigned int local_score,
@@ -228,14 +227,32 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                              bool norm_by_src_rate)
 {
   Real total = 0.0;
-
   unsigned int mesh_offset = _instance * _mesh_filter->n_bins();
   for (unsigned int ext_bin = 0; ext_bin < _num_ext_filter_bins; ++ext_bin)
   {
-    std::vector<Real> cluster_volume {_mesh_filter->n_bins(),0};
-    std::vector<Real> accumulated_volumetric_score {_mesh_filter->n_bins(),0};
+    std::vector<Real> cluster_volume (_mesh.nElem(),0);
     for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
     {
+      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+      auto elem_ptr = _mesh.queryElemPtr(elem_id);
+
+      //check if that element is part of cluster
+      if (_mesh_tally_amalgamation_post_processing and
+          elem_ptr and
+          elem_ptr->get_extra_integer(_extra_integer_index) != -1
+      ){
+        cluster_volume[elem_ptr->get_extra_integer(_extra_integer_index)] += _mesh_template->volume(e);
+      }
+      else{
+        cluster_volume[elem_ptr->id()] = _mesh_template->volume(e);
+      }
+    }
+    for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
+    {
+      auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
+      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
+      auto elem_ptr = _mesh.queryElemPtr(elem_id);
+
       Real unnormalized_tally = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
 
       // divide each tally by the volume that it corresponds to in MOOSE
@@ -243,27 +260,26 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       // Because we require that the mesh template has units of cm based on the
       // mesh constructors in OpenMC, we need to adjust the division
       Real volumetric_tally = unnormalized_tally;
-      volumetric_tally *= norm_by_src_rate
-                              ? _openmc_problem.tallyMultiplier(global_score) /
-                                    _mesh_template->volume(e) * _openmc_problem.scaling() *
-                                    _openmc_problem.scaling() * _openmc_problem.scaling()
-                              : 1.0;
+
+      if (_mesh_tally_amalgamation_post_processing and
+          elem_ptr and
+          elem_ptr->get_extra_integer(_extra_integer_index) != -1
+      ){
+        volumetric_tally *= norm_by_src_rate
+                                ? _openmc_problem.tallyMultiplier(global_score) /
+                                      cluster_volume[elem_ptr->get_extra_integer(_extra_integer_index)] * _openmc_problem.scaling() *
+                                      _openmc_problem.scaling() * _openmc_problem.scaling()
+                                : 1.0;
+      }
+      else{
+        volumetric_tally *= norm_by_src_rate
+                                ? _openmc_problem.tallyMultiplier(global_score) /
+                                      _mesh_template->volume(e) * _openmc_problem.scaling() *
+                                      _openmc_problem.scaling() * _openmc_problem.scaling()
+                                : 1.0;
+      }
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
-
-      auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
-      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
-      libMesh::Elem * elem_ptr = _mesh.queryElemPtr(elem_id);
-
-      if (mesh_tally_amalgamation_post_processing && elem_id->get_extra_integer(_extra_integer_index) != -1)
-        elem_id = elem_id->get_extra_integer(_extra_integer_index);
-      cluster_volume[elem_id] += elem_ptr->volume();
-      accumulated_volumetric_score[elem_id] += elem_ptr->volume()*volumetric_tally;
-    }
-    for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
-    {
-      auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
-      auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
-      fillElementalAuxVariable(var, {elem_id}, accumulated_volumetric_score[elem_id]/cluster_volume[elem_id]);
+      fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
     }
   }
 
