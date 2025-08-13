@@ -40,9 +40,16 @@ MeshTally::validParams()
       "blocks",
       "Subdomains for which to add tallies in OpenMC. If not provided, this mesh "
       "tally will be applied over the entire mesh.");
-
+  params.addParam<bool>("mesh_tally_amalgamation_post_processing",
+                        false,
+                        "if we need to do mesh amalgamation "
+                        "in the post processing or not");
   // The index of this tally into an array of mesh translations. Defaults to zero.
   params.addPrivateParam<unsigned int>("instance", 0);
+  params.addParam<std::string>("extra_integer_name",
+                               "name of the extra integer id which"
+                               "will be used for amalgamation");
+
 
   return params;
 }
@@ -52,10 +59,26 @@ MeshTally::MeshTally(const InputParameters & parameters)
     _mesh_translation(isParamValid("mesh_translation") ? getParam<Point>("mesh_translation")
                                                        : Point(0.0, 0.0, 0.0)),
     _instance(getParam<unsigned int>("instance")),
-    _use_dof_map(_is_adaptive || isParamValid("blocks"))
+    _use_dof_map(_is_adaptive || isParamValid("blocks")),
+    _extra_integer_name(isParamValid("extra_integer_name")?getParam<std::string>("extra_integer_name"):"nothing"),
+    _mesh_tally_amalgamation_post_processing(getParam<bool>("mesh_tally_amalgamation_post_processing"))
 {
   bool nu_scatter =
       std::find(_tally_score.begin(), _tally_score.end(), "nu-scatter") != _tally_score.end();
+
+  if (_mesh_tally_amalgamation_post_processing)
+  {
+    if (!isParamValid("extra_integer_name") || _extra_integer_name == "nothing")
+    {
+      mooseError("For amalgamation you must provide a valid 'extra_integer_name'");
+    }
+    if (!_mesh.hasElementID(_extra_integer_name))
+      mooseError("Extra element integer ID '", _extra_integer_name, "' not found in mesh");
+    else{
+      _extra_integer_index = _mesh.getElementIDIndex(_extra_integer_name);
+      std::cout<<"Extra_integer name = "<<_extra_integer_name<<" extra_integer index =" <<_extra_integer_index<<"\n";
+    }
+  }
 
   // Error check the estimators.
   if (isParamValid("estimator"))
