@@ -56,6 +56,6 @@ private:
   static std::unordered_map<std::string, int> _precedence;
 
   static constexpr int NOT_VISITED = -1;
-  static const std::string _left_parenthesis;
-  static const std::string _right_parenthesis;
+  static constexpr std::string_view _left_parenthesis = "(";
+  static constexpr std::string_view _right_parenthesis = ")";
 };

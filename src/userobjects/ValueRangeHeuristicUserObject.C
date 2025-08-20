@@ -31,12 +31,12 @@ bool
 ValueRangeHeuristicUserObject::isInsideTheRange(libMesh::Elem * element) const
 {
   Real score = getMetricData(element);
-  return _lower_limit < score and score < _upper_limit;
+  return _lower_limit < score && score < _upper_limit;
 }
 
 bool
 ValueRangeHeuristicUserObject::evaluate(libMesh::Elem * base_element,
                                         libMesh::Elem * neighbor_element) const
 {
-  return isInsideTheRange(base_element) and isInsideTheRange(neighbor_element);
+  return isInsideTheRange(base_element) && isInsideTheRange(neighbor_element);
 }

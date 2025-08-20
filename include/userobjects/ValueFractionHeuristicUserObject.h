@@ -2,6 +2,10 @@
 
 #include "ClusteringHeuristicUserObjectBase.h"
 
+/*A clustering heuristic user object which clusters two neighboring elements whose scores
+ * are either more/less than a percentage of extremes.
+ * */
+
 class ValueFractionHeuristicUserObject : public ClusteringHeuristicUserObjectBase
 {
 

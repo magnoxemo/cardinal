@@ -2,6 +2,9 @@
 
 #include "ClusteringHeuristicUserObjectBase.h"
 
+/*A clustering heuristic user object which clusters elements whose relative score
+ * differences are less than the specified tolerance.
+ * */
 class ValueDifferenceHeuristicUserObject : public ClusteringHeuristicUserObjectBase
 {
 

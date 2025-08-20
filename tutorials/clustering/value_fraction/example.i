@@ -1,22 +1,15 @@
-# mesh_inputs_params
-Nx = 20
-Ny = 20
-x_left = 0
-x_right = 10
-y_bottom = 0
-y_up = 10
-Dim = 2
+
 
 [Mesh]
   [generated_mesh]
     type = GeneratedMeshGenerator
-    dim = ${Dim}
-    nx = ${Nx}
-    ny = ${Ny}
-    x_min = ${x_left}
-    x_max = ${x_right}
-    y_min = ${y_bottom}
-    y_max = ${y_up}
+    dim = 2
+    nx = 20
+    ny = 20
+    x_min = 0
+    x_max = 10
+    y_min = 0
+    y_max = 10
     extra_element_integers = 'extreme_value'
   []
 []
