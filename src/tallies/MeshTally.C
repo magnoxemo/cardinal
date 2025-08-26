@@ -262,6 +262,9 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto elem_ptr = _mesh.queryElemPtr(elem_id);
 
       // check if that element is part of cluster and presuming that elem_ptr will be always be valid
+      // Note: by design, any time there is a cluster index, that index is the lowest
+      //       element id of the cluster, and the volume for that element id has been
+      //       initialized
       if (elem_ptr and  _mesh_tally_amalgamation and  elem_ptr->get_extra_integer(_clustering_integer_index) != -1)
         cluster_volume[elem_ptr->get_extra_integer(_clustering_integer_index)] += elem_ptr->volume();
       else
@@ -270,7 +273,6 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
 
     for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
     {
-      auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
       auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
       auto elem_ptr = _mesh.queryElemPtr(elem_id);
 
