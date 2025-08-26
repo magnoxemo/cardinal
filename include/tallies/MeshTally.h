@@ -115,10 +115,16 @@ protected:
   std::unique_ptr<libMesh::ReplicatedMesh> _libmesh_mesh_copy;
   /// A mapping between the OpenMC bins (active block restricted elements) and all elements.
   std::vector<unsigned int> _bin_to_element_mapping;
+
+  /// element to bin mapping
   std::unordered_map<const libMesh::Elem*, unsigned int> _element_to_bin_mapping;
+
   /// extra_integer_id_name
   std::string _clustering_name;
+
+  /// extra_integer index
   unsigned int _clustering_integer_index;
-  /// Mesh tally amalgamation in the post processing
+
+  ///mesh tally amalgamation of the fly
   bool _mesh_tally_amalgamation;
 };

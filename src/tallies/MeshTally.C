@@ -60,8 +60,8 @@ MeshTally::MeshTally(const InputParameters & parameters)
     _instance(getParam<unsigned int>("instance")),
     _use_dof_map(_is_adaptive || isParamValid("blocks")),
     _clustering_name(isParamValid("clustering_name")
-                            ? getParam<std::string>("clustering_name")
-                            : "nothing"),
+                         ? getParam<std::string>("clustering_name")
+                         : "nothing"),
     _mesh_tally_amalgamation(
         getParam<bool>("mesh_tally_amalgamation"))
 {
@@ -189,6 +189,8 @@ MeshTally::spatialFilter()
 
     // When block restriction is active we need to create a copy of the mesh which only contains
     // elements in the desired blocks.
+
+    libMesh::MeshBase* mesh_base_ptr;
     if (_tally_blocks.size() > 0)
     {
       _libmesh_mesh_copy =
@@ -201,15 +203,15 @@ MeshTally::spatialFilter()
       _libmesh_mesh_copy->allow_renumbering(false);
       _libmesh_mesh_copy->prepare_for_use();
 
-      auto mesh_base = *_libmesh_mesh_copy.get();
-
+      mesh_base_ptr = _libmesh_mesh_copy.get();
     }
     else
-      auto mesh_base = _mesh.getMesh();
+      mesh_base_ptr = &_mesh.getMesh();
+
     if (_mesh_tally_amalgamation)
-      openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(mesh_base, _clustering_name, _openmc_problem.scaling()));
+      openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _clustering_name, _openmc_problem.scaling()));
     else
-      openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(mesh_base), _openmc_problem.scaling()));
+      openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
 
   }
   else
