@@ -208,10 +208,11 @@ MeshTally::spatialFilter()
     else
       mesh_base_ptr = &_mesh.getMesh();
 
+    openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
+
     if (_mesh_tally_amalgamation)
-      openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _clustering_name, _openmc_problem.scaling()));
-    else
-      openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
+      openmc::model::meshes.back()->set_mesh_tally_amalgamation(_clustering_name);
+
 
   }
   else
