@@ -211,7 +211,7 @@ MeshTally::spatialFilter()
     openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
 
     if (_mesh_tally_amalgamation)
-      openmc::model::meshes.back()->set_mesh_tally_amalgamation(_clustering_name);
+      dynamic_cast<openmc::LibMesh *>(openmc::model::meshes.back().get())->set_mesh_tally_amalgamation(_clustering_name);
 
 
   }
