@@ -117,8 +117,8 @@ protected:
   std::vector<unsigned int> _bin_to_element_mapping;
   std::unordered_map<const libMesh::Elem*, unsigned int> _element_to_bin_mapping;
   /// extra_integer_id_name
-  std::string _extra_integer_name;
-  unsigned int _extra_integer_index;
+  std::string _clustering_name;
+  unsigned int _clustering_integer_index;
   /// Mesh tally amalgamation in the post processing
-  bool _mesh_tally_amalgamation_post_processing;
+  bool _mesh_tally_amalgamation;
 };

@@ -40,13 +40,13 @@ MeshTally::validParams()
       "blocks",
       "Subdomains for which to add tallies in OpenMC. If not provided, this mesh "
       "tally will be applied over the entire mesh.");
-  params.addParam<bool>("mesh_tally_amalgamation_post_processing",
+  params.addParam<bool>("mesh_tally_amalgamation",
                         false,
                         "if we need to do mesh amalgamation "
-                        "in the post processing or not");
+                        "on the fly or not");
   // The index of this tally into an array of mesh translations. Defaults to zero.
   params.addPrivateParam<unsigned int>("instance", 0);
-  params.addParam<std::string>("extra_integer_name",
+  params.addParam<std::string>("clustering_name",
                                "name of the extra integer id which"
                                "will be used for amalgamation");
 
@@ -59,29 +59,23 @@ MeshTally::MeshTally(const InputParameters & parameters)
                                                        : Point(0.0, 0.0, 0.0)),
     _instance(getParam<unsigned int>("instance")),
     _use_dof_map(_is_adaptive || isParamValid("blocks")),
-    _extra_integer_name(isParamValid("extra_integer_name")
-                            ? getParam<std::string>("extra_integer_name")
+    _clustering_name(isParamValid("clustering_name")
+                            ? getParam<std::string>("clustering_name")
                             : "nothing"),
-    _mesh_tally_amalgamation_post_processing(
-        getParam<bool>("mesh_tally_amalgamation_post_processing"))
+    _mesh_tally_amalgamation(
+        getParam<bool>("mesh_tally_amalgamation"))
 {
   bool nu_scatter =
       std::find(_tally_score.begin(), _tally_score.end(), "nu-scatter") != _tally_score.end();
 
-  if (_mesh_tally_amalgamation_post_processing)
+  if (_mesh_tally_amalgamation)
   {
-    if (!isParamValid("extra_integer_name") || _extra_integer_name == "nothing")
-    {
-      mooseError("For amalgamation you must provide a valid 'extra_integer_name'");
-    }
-    if (!_mesh.hasElementID(_extra_integer_name))
-      mooseError("Extra element integer ID '", _extra_integer_name, "' not found in mesh");
+    if (!isParamValid("clustering_name") || _clustering_name == "nothing")
+      mooseError("For amalgamation you must provide a valid 'clustering_name'");
+    if (!_mesh.hasElementID(_clustering_name))
+      mooseError("Extra element integer ID '", _clustering_name, "' not found in mesh");
     else
-    {
-      _extra_integer_index = _mesh.getElementIDIndex(_extra_integer_name);
-      std::cout << "Extra_integer name = " << _extra_integer_name
-                << " extra_integer index =" << _extra_integer_index << "\n";
-    }
+      _clustering_integer_index = _mesh.getElementIDIndex(_clustering_name);
   }
 
   // Error check the estimators.
@@ -187,7 +181,7 @@ MeshTally::spatialFilter()
       for (const auto & old_elem : libMesh::as_range(begin, end)){
 
         _bin_to_element_mapping.push_back(old_elem->id());
-        _element_to_bin_mapping.insert({old_elem,_bin_to_element_mapping.size()-1});
+        _element_to_bin_mapping.insert(std::make_pair(old_elem,_bin_to_element_mapping.size()-1));
       }
 
       _bin_to_element_mapping.shrink_to_fit();
@@ -207,26 +201,16 @@ MeshTally::spatialFilter()
       _libmesh_mesh_copy->allow_renumbering(false);
       _libmesh_mesh_copy->prepare_for_use();
 
-      if (_mesh_tally_amalgamation_post_processing)
-      {
-        openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(
-            *_libmesh_mesh_copy.get(), _extra_integer_name, _openmc_problem.scaling()));
-      }
-      else
-        openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(
-            *_libmesh_mesh_copy.get(), _openmc_problem.scaling()));
+      auto mesh_base = *_libmesh_mesh_copy.get();
+
     }
     else
-    {
-      if (_mesh_tally_amalgamation_post_processing)
-      {
-        openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(
-            _mesh.getMesh(), _extra_integer_name, _openmc_problem.scaling()));
-      }
-      else
-        openmc::model::meshes.emplace_back(
-            std::make_unique<openmc::LibMesh>(_mesh.getMesh(), _openmc_problem.scaling()));
-    }
+      auto mesh_base = _mesh.getMesh();
+    if (_mesh_tally_amalgamation)
+      openmc::model::meshes.emplace_back(std::make_unique<openmc::LibMesh>(mesh_base, _clustering_name, _openmc_problem.scaling()));
+    else
+      openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(mesh_base), _openmc_problem.scaling()));
+
   }
   else
     openmc::model::meshes.emplace_back(
@@ -274,16 +258,11 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
       auto elem_ptr = _mesh.queryElemPtr(elem_id);
 
-      // check if that element is part of cluster
-      if ( elem_ptr and elem_ptr->active() and _mesh_tally_amalgamation_post_processing
-          and elem_ptr->get_extra_integer(_extra_integer_index) != -1)
-      {
-        cluster_volume[elem_ptr->get_extra_integer(_extra_integer_index)] += elem_ptr->volume();
-      }
+      // check if that element is part of cluster and presuming that elem_ptr will be always be valid
+      if (elem_ptr and  _mesh_tally_amalgamation and  elem_ptr->get_extra_integer(_clustering_integer_index) != -1)
+        cluster_volume[elem_ptr->get_extra_integer(_clustering_integer_index)] += elem_ptr->volume();
       else
-      {
-        cluster_volume[elem_ptr->id()] = elem_ptr->volume();
-      }
+        cluster_volume[elem_id] = _mesh_template->volume(e);
     }
 
     for (decltype(_mesh_filter->n_bins()) e = 0; e < _mesh_filter->n_bins(); ++e)
@@ -293,45 +272,31 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       auto elem_ptr = _mesh.queryElemPtr(elem_id);
 
 
-      if (_mesh_tally_amalgamation_post_processing and elem_ptr and
-          elem_ptr->get_extra_integer(_extra_integer_index) != -1)
-      {
+      auto bin_id = e;
+      auto bin_volume = cluster_volume[elem_id];
+
+      if (elem_ptr and _mesh_tally_amalgamation and elem_ptr->get_extra_integer(_clustering_integer_index) != -1){
         //that means part of a cluster. Now I need to pull the score from the first element
-        auto first_element_in_the_cluster = _mesh.queryElemPtr(elem_ptr->get_extra_integer(_extra_integer_index));
-        auto bin_id = _element_to_bin_mapping.at(first_element_in_the_cluster);
-        Real unnormalized_tally = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + bin_id);
-
-        // divide each tally by the volume that it corresponds to in MOOSE
-        // because we will apply it as a volumetric tally (per unit volume).
-        // Because we require that the mesh template has units of cm based on the
-        // mesh constructors in OpenMC, we need to adjust the division
-        Real volumetric_tally = unnormalized_tally;
-
-        volumetric_tally *=
-            norm_by_src_rate
-                ? _openmc_problem.tallyMultiplier(global_score) /
-                      cluster_volume[first_element_in_the_cluster->id()] *
-                      _openmc_problem.scaling() * _openmc_problem.scaling() *
-                      _openmc_problem.scaling()
-                : 1.0;
-        total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
-        fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
+        //TO DO: add checks if first_element_in_the_cluster could be null ptr as well.
+        auto first_element_in_the_cluster = _mesh.queryElemPtr(elem_ptr->get_extra_integer(_clustering_integer_index));
+        bin_id = _element_to_bin_mapping.at(first_element_in_the_cluster);
+        bin_volume = cluster_volume[first_element_in_the_cluster->id()];
       }
 
-      else
-      {
-        Real unnormalized_tally = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + e);
+      // divide each tally by the volume that it corresponds to in MOOSE
+      // because we will apply it as a volumetric tally (per unit volume).
+      // Because we require that the mesh template has units of cm based on the
+      // mesh constructors in OpenMC, we need to adjust the division
+      Real unnormalized_tally = tally_vals[local_score](ext_bin * _mesh_filter->n_bins() + bin_id);
+      Real volumetric_tally = unnormalized_tally;
 
-        Real volumetric_tally = unnormalized_tally;
-
-        volumetric_tally *= norm_by_src_rate
-                                ? _openmc_problem.tallyMultiplier(global_score) /
-                                      _mesh_template->volume(e) * _openmc_problem.scaling() *
-                                      _openmc_problem.scaling() * _openmc_problem.scaling()
-                                : 1.0;
-        total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
-        fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
-      }
+      volumetric_tally *= norm_by_src_rate
+                              ? _openmc_problem.tallyMultiplier(global_score) /
+                                    bin_volume * _openmc_problem.scaling() *
+                                    _openmc_problem.scaling() * _openmc_problem.scaling()
+                              : 1.0;
+      total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
+      fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
     }
   }
 
