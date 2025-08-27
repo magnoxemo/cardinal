@@ -300,6 +300,8 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                                     bin_volume * _openmc_problem.scaling() *
                                     _openmc_problem.scaling() * _openmc_problem.scaling()
                               : 1.0;
+
+      auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : unnormalized_tally;
       fillElementalAuxVariable(var, {elem_id}, volumetric_tally);
     }
