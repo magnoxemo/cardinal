@@ -18,6 +18,7 @@
 
 #ifdef ENABLE_OPENMC_COUPLING
 #include "MeshTally.h"
+#include "DisplacedProblem.h"
 
 #include "libmesh/replicated_mesh.h"
 
@@ -36,14 +37,7 @@ MeshTally::validParams()
   params.addParam<Point>("mesh_translation",
                          "Coordinate to which this mesh should be "
                          "translated. Units must match those used to define the [Mesh].");
-  params.addParam<std::vector<SubdomainName>>(
-      "blocks",
-      "Subdomains for which to add tallies in OpenMC. If not provided, this mesh "
-      "tally will be applied over the entire mesh.");
-  params.addParam<bool>("mesh_tally_amalgamation",
-                        false,
-                        "if we need to do mesh amalgamation "
-                        "on the fly or not");
+
   // The index of this tally into an array of mesh translations. Defaults to zero.
   params.addPrivateParam<unsigned int>("instance", 0);
   params.addParam<std::string>("clustering_name",
@@ -65,6 +59,9 @@ MeshTally::MeshTally(const InputParameters & parameters)
     _mesh_tally_amalgamation(
         getParam<bool>("mesh_tally_amalgamation"))
 {
+  if (isParamSetByUser("blocks"))
+    mooseError("This parameter is deprecated, use 'block' instead!");
+
   bool nu_scatter =
       std::find(_tally_score.begin(), _tally_score.end(), "nu-scatter") != _tally_score.end();
 
@@ -89,7 +86,8 @@ MeshTally::MeshTally(const InputParameters & parameters)
     _estimator = nu_scatter ? openmc::TallyEstimator::ANALOG : openmc::TallyEstimator::COLLISION;
 
   // Error check the mesh template.
-  if (_mesh.getMesh().allow_renumbering() && !_mesh.getMesh().is_replicated())
+  if (_openmc_problem.getMooseMesh().getMesh().allow_renumbering() &&
+      !_openmc_problem.getMooseMesh().getMesh().is_replicated())
     mooseError(
         "Mesh tallies currently require 'allow_renumbering = false' to be set in the [Mesh]!");
 
@@ -99,10 +97,17 @@ MeshTally::MeshTally(const InputParameters & parameters)
       paramError("mesh_template",
                  "Adaptivity is not supported when loading a mesh from 'mesh_template'!");
 
-    if (isParamValid("blocks"))
-      paramError("blocks",
+    if (isParamValid("block"))
+      paramError("block",
                  "Block restriction is currently not supported for mesh tallies which load a "
                  "mesh from a file!");
+
+    if (_openmc_problem.useDisplaced())
+      paramError("mesh_template",
+                 "Tallying on a file-based mesh is not supported for moving-mesh cases as there is "
+                 "not a mechanism to update the mesh geometry. You can use a mesh tally for moving "
+                 "mesh cases by instead tallying directly on the [Mesh]. Simply do not provide the "
+                 "'mesh_template' parameter.");
 
     _mesh_template_filename = &getParam<std::string>("mesh_template");
   }
@@ -118,7 +123,7 @@ MeshTally::MeshTally(const InputParameters & parameters)
     // for distributed meshes, each rank only owns a portion of the mesh information, but
     // OpenMC wants the entire mesh to be available on every rank. We might be able to add
     // this feature in the future, but will need to investigate
-    if (!_mesh.getMesh().is_replicated())
+    if (!_openmc_problem.getMooseMesh().getMesh().is_replicated())
       mooseError("Directly tallying on the [Mesh] block by OpenMC is not yet supported "
                  "for distributed meshes!");
 
@@ -126,25 +131,6 @@ MeshTally::MeshTally(const InputParameters & parameters)
       paramError("mesh_translation",
                  "The mesh filter cannot be translated if directly tallying on the mesh "
                  "provided in the [Mesh] block!");
-
-    // Fetch subdomain IDs for block restrictions.
-    if (isParamValid("blocks"))
-    {
-      auto block_names = getParam<std::vector<SubdomainName>>("blocks");
-      if (block_names.empty())
-        paramError("blocks", "Subdomain names must be provided if using 'blocks'!");
-
-      auto block_ids = _mesh.getSubdomainIDs(block_names);
-      std::copy(
-          block_ids.begin(), block_ids.end(), std::inserter(_tally_blocks, _tally_blocks.end()));
-
-      // Check to make sure all of the blocks are in the mesh.
-      const auto & subdomains = _mesh.meshSubdomains();
-      for (std::size_t b = 0; b < block_names.size(); ++b)
-        if (subdomains.find(block_ids[b]) == subdomains.end())
-          paramError("blocks",
-                     "Block '" + block_names[b] + "' specified in 'blocks' not found in mesh!");
-    }
   }
 
   /**
@@ -162,7 +148,8 @@ MeshTally::spatialFilter()
   // Create the OpenMC mesh which will be tallied on.
   if (!_mesh_template_filename)
   {
-    auto msh = dynamic_cast<const libMesh::ReplicatedMesh *>(_mesh.getMeshPtr());
+    auto msh =
+        dynamic_cast<const libMesh::ReplicatedMesh *>(_openmc_problem.getMooseMesh().getMeshPtr());
     if (!msh)
       mooseError("Internal error: The mesh is not a replicated mesh.");
 
@@ -193,8 +180,8 @@ MeshTally::spatialFilter()
     libMesh::MeshBase* mesh_base_ptr;
     if (_tally_blocks.size() > 0)
     {
-      _libmesh_mesh_copy =
-          std::make_unique<libMesh::ReplicatedMesh>(_openmc_problem.comm(), _mesh.dimension());
+      _libmesh_mesh_copy = std::make_unique<libMesh::ReplicatedMesh>(
+          _openmc_problem.comm(), _openmc_problem.getMooseMesh().dimension());
 
       msh->create_submesh(*_libmesh_mesh_copy.get(),
                           msh->active_subdomain_set_elements_begin(_tally_blocks),
@@ -202,17 +189,16 @@ MeshTally::spatialFilter()
       _libmesh_mesh_copy->allow_find_neighbors(true);
       _libmesh_mesh_copy->allow_renumbering(false);
       _libmesh_mesh_copy->prepare_for_use();
-
       mesh_base_ptr = _libmesh_mesh_copy.get();
     }
-    else
-      mesh_base_ptr = &_mesh.getMesh();
-
-    openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
-
+    mesh_base_ptr = &_openmc_problem.getMooseMesh().getMesh();
     if (_mesh_tally_amalgamation)
-      dynamic_cast<openmc::LibMesh *>(openmc::model::meshes.back().get())->set_mesh_tally_amalgamation(_clustering_name);
-
+    {
+      auto mesh_amalgamation_mesh = std::make_unique<openmc::AdaptiveLibMesh>(*mesh_base_ptr, _openmc_problem.scaling());
+      mesh_amalgamation_mesh->set_mesh_tally_amalgamation(_clustering_name);
+      openmc::model::meshes.emplace_back(std::move(mesh_amalgamation_mesh));
+    }
+    openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
 
   }
   else
@@ -244,6 +230,7 @@ MeshTally::resetTally()
   // Erase the OpenMC mesh.
   openmc::model::meshes.erase(openmc::model::meshes.begin() + _mesh_index);
 }
+
 Real
 MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                              unsigned int local_score,
