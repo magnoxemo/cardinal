@@ -43,6 +43,11 @@ MeshTally::validParams()
   params.addParam<std::string>("clustering_name",
                                "name of the extra integer id which"
                                "will be used for amalgamation");
+  params.addParam<bool>("mesh_tally_amalgamation",
+                        false,
+                        "if we need to do mesh amalgamation "
+                        "in the post processing or not");
+                        "on the fly or not")
 
   return params;
 }
