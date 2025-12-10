@@ -45,9 +45,7 @@ MeshTally::validParams()
                                "will be used for amalgamation");
   params.addParam<bool>("mesh_tally_amalgamation",
                         false,
-                        "if we need to do mesh amalgamation "
-                        "in the post processing or not");
-                        "on the fly or not")
+                        "if we need to do mesh amalgamation on the fly or not");
 
   return params;
 }
@@ -196,14 +194,18 @@ MeshTally::spatialFilter()
       _libmesh_mesh_copy->prepare_for_use();
       mesh_base_ptr = _libmesh_mesh_copy.get();
     }
-    mesh_base_ptr = &_openmc_problem.getMooseMesh().getMesh();
-    if (_mesh_tally_amalgamation)
+    else
+        mesh_base_ptr = &_openmc_problem.getMooseMesh().getMesh();
+
+    if (_is_adaptive)
     {
-      auto mesh_amalgamation_mesh = std::make_unique<openmc::AdaptiveLibMesh>(*mesh_base_ptr, _openmc_problem.scaling());
-      mesh_amalgamation_mesh->set_mesh_tally_amalgamation(_clustering_name);
-      openmc::model::meshes.emplace_back(std::move(mesh_amalgamation_mesh));
+        auto adaptive_mesh = std::make_unique<openmc::AdaptiveLibMesh>(*mesh_base_ptr, _openmc_problem.scaling());
+        if (_mesh_tally_amalgamation)
+            adaptive_mesh->set_mesh_tally_amalgamation(_clustering_name);
+        openmc::model::meshes.emplace_back(std::move(adaptive_mesh));
     }
-    openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
+    else
+        openmc::model::meshes.emplace_back( std::make_unique<openmc::LibMesh>(*mesh_base_ptr, _openmc_problem.scaling()));
 
   }
   else
@@ -303,7 +305,7 @@ MeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
 }
 
 void
-MeshTally::checkMeshTemplateAndTranslations() const
+MeshTally::checkMeshTemplateAndTranslations()
 {
   // we can do some rudimentary checking on the mesh template by comparing the centroid
   // coordinates compared to centroids in the [Mesh] (because right now, we just doing a simple
