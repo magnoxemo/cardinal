@@ -106,6 +106,10 @@ A.J. Novak, D. Andrs, P. Shriwise, D. Shaver, P.K. Romano, E. Merzari, and P. Ke
 
 # Heat Pipe Reactors
 
+C. Genoni T. Hallam, F. Franceschini, W. Walters, C. Liping, N. Roskoff, M. Boychenko, V. Kukucboyaci, P. Khambatta, and C. Fiorina,
+"Benchmarking of Serpent2/OFFBEAT and Cardinal for Coupling Neutron Transport and Thermo-Mechanics of an eVinci-like Microreactor"
+*Proceedings of PHYSOR* (2026)
+
 M. Eltawila, A.J. Novak, and Y. Miao,
 ["Coupled Multiphysics Modeling of Heat Pipe Microreactors using Cardinal, BISON, and Sockeye"](https://www.ans.org/pubs/proceedings/article-55557/)
 *Proceedings of Physor* (2024)
@@ -115,6 +119,14 @@ M. Eltawila, A.J. Novak,
 *Proceedings of ANS Student Conference* (2024)
 
 # Molten Salt Reactors
+
+M. Dalinger, E. Merzari, and S. Lee,
+"Multiphysics Modelling of the Molten Salt Fast Reactor using NekRS and the Fission Matrix Method"
+*Proceedings of ANS* (2026)
+
+B. Kovacevic, L. Charlot, and S. Terlizzi,
+"Multiphysics Modeling of Molten Salt Reactors Using MOOSE and OpenMC"
+*Proceedings of ANS* (2026)
 
 M. Dalinger, E. Merzari, S. Lee, and C. Emler,
 ["High-Fidelity Modelling of the Molten Salt Fast Reactor"](https://www.researchgate.net/publication/393478397_High-Fidelity_Modelling_of_the_Molten_Salt_Fast_Reactor)
@@ -145,14 +157,13 @@ H. Park, Y. Yu, E. Shemon, and A. Novak,
 
 # Sodium Fast Reactors
 
+D.R. Shaver and M. Dalinger,
+"Simulation of NACIE Benchmark Tests using NekRS and Cardinal"
+*NURETH* (2025)
+
 D.R. Shaver, A. Kraus, A. Obabko, S. Harper, M. Pham, and S. Yoon,
 "Validation of NekRS for Flow-Splitting in a Wire-Wrapped Fuel Pin Bundle"
 *NURETH* (2025)
-
-A.J. Novak, C. Bourdot Dutra, D. Shaver, and E. Merzari,
-["CFD Simulation of Interassembly Bypass Flow in Sodium Fast Reactors"](https://www.sciencedirect.com/science/article/pii/S0029549325002213)
-439 (114044)
-*Nuclear Engineering and Design* (2025)
 
 A.J. Novak, C. Bourdot Dutra, D. Shaver, and E. Merzari,
 ["CFD Simulations of Interassembly Bypass Flow in Sodium Fast Reactors"](https://www.sciencedirect.com/science/article/pii/S0029549325002213)
@@ -176,10 +187,25 @@ A.J. Novak, P. Shriwise, R. Rahaman, P.K. Romano, E. Merzari, and D. Gaston,
 
 # Space Nuclear Reactors
 
+M.A. Mendes, M. Eltawila, K.C. Sawatzky, A.J. Novak, and R.C. Martineau,
+["Validation of Cardinal Coupled Neutronics and Thermomechanics Using the KRUSTY Experiments"](https://www.ans.org/meetings/nets2026/session/view-3632/#paper_11427)
+*Proceedings of NETS* (2026)
+
+C. Eck, J. Stonehill, and C. Smith,
+["A High-Fidelity Modeling Approach for Coupling Thermal, Fluid, and Neutronic Analysis in a Nuclear Thermal Propulsion Engine"](https://www.ans.org/meetings/nets2026/session/view-3628/)
+*Proceedings of NETS* (2026)
+
+M. Dalinger, E. Merzari, T. Nguyen, and R. Martineau, ["High-Fidelity Multiphysics Modeling of the SNAP 10/A Space Reactor Using Cardinal"](https://www.tandfonline.com/doi/full/10.1080/00295639.2026.2639917)
+*Nuclear Science and Engineering* (2026)
+
 M. Dalinger, E. Merzari, T. Nguyen, M. Seneca, and R. Martineau, ["Multiphysics Modeling of SNAP 10A/2 Space Reactor with Cardinal"](https://www.ans.org/meetings/nets2025/session/view-2957/)
 *Proceedings of NETS* (2025)
 
 # Fusion Devices and Components
+
+W. Ellis, H. Brooks, A. Davis, and D. Foster,
+"An Integrated MOOSE Workflow for Activation Modelling Using FISPACT-II and Cardinal"
+*Proceedings of PHYSOR* (2026)
 
 K.A. Damm, M. Falcone, R.W. Eardley-Brunt, A. Dubas, and A. Davis,
 ["Progress Towards Large-Eddy Simulation of Multiphase Conjugate Heat Transfer in a Hypervapotron"](conferences.iaea.org/event/392/papers/36412/files/13476-damm_fec_2025_manuscript.pdf)
@@ -211,15 +237,33 @@ A. Huxford, V. Petrov, A. Manera, V. Coppo Leite, E. Merzari, and L. Zou
 
 # Fluid-Structure Interaction
 
+B.W. Spencer, Y. Yu, W.M. Hoffman, D.R. Shaver, and E. Merzari,
+["3D Probabilistic Fracture Mechanics / Computational Fluid Dynamics Simulation of a Reactor Pressure Vessel Under Transient Conditions"](https://www.sciencedirect.com/science/article/pii/S002954932600097X)
+*Nuclear Engineering and Design* (2026)
+
 A. Chaube, A. Novak, H. Yuan, E. Merzari, D.R. Shaver, P.F. Fischer, and C. Brooks,
 ["A Preliminary Fluid-Structure Coupling of NekRS and MOOSE via Cardinal"](https://ui.adsabs.harvard.edu/abs/2023arXiv230811777C/abstract)
 *Proceedings of M&C* (2023)
 
 # Adaptive Mesh Refinement
 
+E.W. Ahammed, K. Sawatzky, L. Gross, A. Novak, P. Shriwise, P. Romano, and P. Wilson,
+"Development of Mesh Tally Amalgamation Algorithm for Coupled High Fidelity Multiphysics Simulation"
+*Proceedings of Physor* (2026)
+
+K.C. Sawatzky, E.W. Ahammed, P.P.H. Wilson, P.C. Shriwise, P.K. Romano, A.J. Novak,
+"Mesh Tally Adaptive Mesh Refinement Strategies for Spatial Gradients Driven by Material Heterogeneities"
+*Proceedings of Physor* (2026)
+
 K. C. Sawatzky, E. W. Ahammed, P. P.H. Wilson, P. C. Shriwise, P. K. Romano, A. J. Novak,
 ["Adaptive Mesh Refinement Applied to Unstructured Mesh Tallies in Cardinal-OpenMC"](https://www.ans.org/meetings/ac2025/sessions/attachment/paper-12816/)
 *Proceedings of the ANS Annual Meeting* (2025)
+
+# Multigroup Cross Sections
+
+C.H.H. Moore, K.C. Sawatzky, A.J. Novak, and K.D. Atkinson,
+"Validation of a Two-Step Neutronics Workflow using Gnat and OpenMC with the ZED-2 Research Reactor"
+*Proceedings of Physor* (2026)
 
 # AI/ML
 
@@ -236,6 +280,10 @@ V.C. Leite, E. Merzari, A. Novak, R. Ponciroli, and L. Ibarra,
 M. Eltawila, P.C.A. Simon, G.L. Giudicelli, H. Brooks, N. Wozniak, and A.J. Novak,
 ["Thermomechanics Coupling to Monte Carlo Particle Transport on Unstructured Mesh Geometries Using Cardinal"](https://doi.org/10.1016/j.anucene.2025.112068)
 *Annals of Nuclear Energy* (2026)
+
+D.R. Shaver and M. Dalinger,
+"Simulation of NACIE Benchmark Tests using NekRS and Cardinal"
+*NURETH* (2025)
 
 L. Gross, A.J. Novak, P. Shriwise, and P.P.H. Wilson,
 ["Verification of the Cardinal Multiphysics Solver for 1-D Coupled Heat Transfer and Neutron Transport"](https://www.researchgate.net/publication/373173646_Verification_of_the_Cardinal_Multiphysics_Solver_for_1-D_Coupled_Heat_Transfer_and_Neutron_Transport)

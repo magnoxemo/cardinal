@@ -112,6 +112,7 @@ SOLID_PROPERTIES    := yes
 STOCHASTIC_TOOLS    := yes
 SUBCHANNEL          := yes
 THERMAL_HYDRAULICS  := yes
+FUNCTIONAL_EXPANSION_TOOLS := yes
 
 # Configure the optional dependencies (NekRS, OpenMC, submodules, etc.)
 include config/check_deps.mk

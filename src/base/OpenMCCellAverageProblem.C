@@ -23,6 +23,7 @@
 #include "DelimitedFileReader.h"
 #include "DisplacedProblem.h"
 #include "TallyBase.h"
+#include "FunctionSeries.h"
 #include "CellTally.h"
 #include "AddTallyAction.h"
 #include "SetupMGXSAction.h"
@@ -37,6 +38,7 @@
 #include "openmc/particle.h"
 #include "openmc/photon.h"
 #include "openmc/message_passing.h"
+#include "openmc/mgxs_interface.h"
 #include "openmc/nuclide.h"
 #include "openmc/random_lcg.h"
 #include "openmc/settings.h"
@@ -44,7 +46,6 @@
 #include "openmc/tallies/trigger.h"
 #include "openmc/volume_calc.h"
 #include "openmc/universe.h"
-#include "xtensor/xarray.hpp"
 
 registerMooseObject("CardinalApp", OpenMCCellAverageProblem);
 
@@ -61,11 +62,6 @@ OpenMCCellAverageProblem::validParams()
                         "Whether to automatically output the mapping from OpenMC cells to the "
                         "[Mesh], usually for diagnostic purposes");
 
-  params.addParam<bool>("check_tally_sum",
-                        "Whether to check consistency between the local tallies "
-                        "and a global tally sum. This will require that the integral "
-                        "of the local tally matches a tally with no filters (defined "
-                        "over the entire phase space).");
   params.addParam<MooseEnum>(
       "initial_properties",
       getInitialPropertiesEnum(),
@@ -86,7 +82,7 @@ OpenMCCellAverageProblem::validParams()
                         "are spatially separate. This is a performance optimization");
 
   MooseEnum scores_heat(
-    "heating heating_local kappa_fission fission_q_prompt fission_q_recoverable");
+      "heating heating_local kappa_fission fission_q_prompt fission_q_recoverable");
   params.addParam<MooseEnum>(
       "source_rate_normalization",
       scores_heat,
@@ -113,8 +109,10 @@ OpenMCCellAverageProblem::validParams()
 
   params.addParam<std::vector<std::vector<std::string>>>(
       "temperature_variables",
-      "Vector of variable names corresponding to the temperatures sent into OpenMC. Each entry maps to "
-      "the corresponding entry in 'temperature_blocks.' If not specified, each entry defaults to 'temp'");
+      "Vector of variable names corresponding to the temperatures sent into OpenMC. Each entry "
+      "maps to "
+      "the corresponding entry in 'temperature_blocks.' If not specified, each entry defaults to "
+      "'temp'");
   params.addParam<std::vector<std::vector<SubdomainName>>>(
       "temperature_blocks",
       "Blocks corresponding to each of the 'temperature_variables'. If not specified, "
@@ -153,9 +151,8 @@ OpenMCCellAverageProblem::validParams()
       "Whether to check that your model does indeed have identical cell fills, allowing "
       "you to set 'identical_cell_fills' to speed up initialization");
 
-  params.addParam<MooseEnum>("relaxation",
-                             getRelaxationEnum(),
-                             "Type of relaxation to apply to the OpenMC solution");
+  params.addParam<MooseEnum>(
+      "relaxation", getRelaxationEnum(), "Type of relaxation to apply to the OpenMC solution");
   params.addRangeCheckedParam<Real>("relaxation_factor",
                                     0.5,
                                     "relaxation_factor > 0.0 & relaxation_factor < 2.0",
@@ -175,8 +172,10 @@ OpenMCCellAverageProblem::validParams()
       "User object that will perform a stochastic volume calculation to get the OpenMC "
       "cell volumes. This can be used to check that the MOOSE regions to which the cells map are "
       "of approximately the same volume as the true cells.");
-  params.addParam<UserObjectName>("skinner", "When using DAGMC geometries, an optional skinner that will "
-    "regenerate the OpenMC geometry on-the-fly according to iso-contours of temperature and density");
+  params.addParam<UserObjectName>("skinner",
+                                  "When using DAGMC geometries, an optional skinner that will "
+                                  "regenerate the OpenMC geometry on-the-fly according to "
+                                  "iso-contours of temperature and density");
   params.addClassDescription(
       "Couple OpenMC to MOOSE through cell-averaged temperature, density, and tallies.");
 
@@ -241,11 +240,6 @@ OpenMCCellAverageProblem::OpenMCCellAverageProblem(const InputParameters & param
     _need_to_reinit_coupling |= _use_displaced;
   }
 
-  if (_use_displaced && !_using_skinner)
-    mooseWarning("Your problem has a moving mesh, but you have not provided a 'skinner'. The "
-                 "[Mesh] will move, but the underlying OpenMC geometry will remain unchanged. "
-                 "Unexpected behavior may occur.");
-
   // Look through the list of AddTallyActions to see if we have a CellTally. If so, we need to map
   // cells.
   const auto & tally_actions = getMooseApp().actionWarehouse().getActions<AddTallyAction>();
@@ -305,13 +299,14 @@ OpenMCCellAverageProblem::OpenMCCellAverageProblem(const InputParameters & param
     checkUnusedParam(params, "particles", "using Dufek-Gudowski relaxation");
     checkRequiredParam(params, "first_iteration_particles", "using Dufek-Gudowski relaxation");
     openmc::settings::n_particles = getParam<int>("first_iteration_particles");
+    _n_particles_1 = getParam<int>("first_iteration_particles");
   }
   else
     checkUnusedParam(params, "first_iteration_particles", "not using Dufek-Gudowski relaxation");
 
-    // OpenMC will throw an error if the geometry contains DAG universes but OpenMC wasn't compiled
-    // with DAGMC. So we can assume that if we have a DAGMC geometry, that we will also by this
-    // point have DAGMC enabled.
+  // OpenMC will throw an error if the geometry contains DAG universes but OpenMC wasn't compiled
+  // with DAGMC. So we can assume that if we have a DAGMC geometry, that we will also by this
+  // point have DAGMC enabled.
 #ifdef ENABLE_DAGMC
   bool has_csg;
   bool has_dag;
@@ -386,10 +381,9 @@ OpenMCCellAverageProblem::OpenMCCellAverageProblem(const InputParameters & param
                  "root universe.");
   }
 #else
-  checkUnusedParam(params, "skinner", "DAGMC geometries in OpenMC are not enabled in this build of Cardinal");
+  checkUnusedParam(
+      params, "skinner", "DAGMC geometries in OpenMC are not enabled in this build of Cardinal");
 #endif
-
-  _n_particles_1 = nParticles();
 
   if (_relaxation != relaxation::constant)
     checkUnusedParam(params, "relaxation_factor", "not using constant relaxation");
@@ -523,6 +517,16 @@ OpenMCCellAverageProblem::initialSetup()
 
   getOpenMCUserObjects();
 
+  if (_use_displaced && !_using_skinner && !hasCellTransform())
+    mooseWarning("Your problem has a moving mesh, but you have not provided a 'skinner' or an "
+                 "OpenMCCellTransform user object (both of which move the OpenMC geometry). The "
+                 "[Mesh] will move, but the underlying OpenMC geometry will remain unchanged. "
+                 "Unexpected behavior may occur.");
+
+  // Coupling re-initialization should be triggered if we have cells transofrms which can happen
+  // even if the mesh isn't moving or adaptive.
+  _need_to_reinit_coupling |= hasCellTransform();
+
   if (!_needs_to_map_cells)
     checkUnusedParam(parameters(),
                      "volume_calculation",
@@ -535,8 +539,9 @@ OpenMCCellAverageProblem::initialSetup()
     _volume_calc = dynamic_cast<OpenMCVolumeCalculation *>(base);
 
     if (!_volume_calc)
-      paramError("volume_calculation", "The 'volume_calculation' user object must be of type "
-        "OpenMCVolumeCalculation!");
+      paramError("volume_calculation",
+                 "The 'volume_calculation' user object must be of type "
+                 "OpenMCVolumeCalculation!");
   }
 
   if (isParamValid("symmetry_mapper"))
@@ -579,8 +584,8 @@ OpenMCCellAverageProblem::initialSetup()
 
     if (_symmetry)
       mooseError("Cannot combine the 'skinner' with 'symmetry_mapper'!\n\nWhen using a skinner, "
-        "the [Mesh] must exactly match the underlying OpenMC model, so there is\n"
-        "no need to transform spatial coordinates to map between OpenMC and the [Mesh].");
+                 "the [Mesh] must exactly match the underlying OpenMC model, so there is\n"
+                 "no need to transform spatial coordinates to map between OpenMC and the [Mesh].");
 
     // Rudimentary error checking to make sure all non-void DAGMC cells are mapped. This helps catch
     // errors where the skinned MOOSE mesh deletes DAGMC geometry. Also error if the user is
@@ -641,9 +646,11 @@ OpenMCCellAverageProblem::initialSetup()
           "' user object (and vice versa)");
 
     if (_initial_condition == coupling::hdf5)
-      paramError("initial_properties", "Cannot load initial temperature and density properties from "
-        "HDF5 files because there is no guarantee that the geometry (which is adaptively changing) matches "
-        "that used to write the HDF5 file.");
+      paramError("initial_properties",
+                 "Cannot load initial temperature and density properties from "
+                 "HDF5 files because there is no guarantee that the geometry (which is adaptively "
+                 "changing) matches "
+                 "that used to write the HDF5 file.");
 
     // If the DAGMC universe is the root universe the geometry contains no CSG cells. We need
     // to force the skinner to add a graveyard as the problem will contain no boundary contitions
@@ -676,10 +683,12 @@ OpenMCCellAverageProblem::getMaterialInEachSubdomain() const
     if (s.second.size() > 1)
     {
       std::stringstream msg;
-      msg << "The 'skinner' expects to find one OpenMC material mapped to each [Mesh] subdomain, but " <<
-        Moose::stringify(s.second.size()) << " materials\nmapped to subdomain " << s.first <<
-        ". This indicates your [Mesh] is not " <<
-        "consistent with the .h5m model.\n\nThe materials which mapped to subdomain " << s.first << " are:\n";
+      msg << "The 'skinner' expects to find one OpenMC material mapped to each [Mesh] subdomain, "
+             "but "
+          << Moose::stringify(s.second.size()) << " materials\nmapped to subdomain " << s.first
+          << ". This indicates your [Mesh] is not "
+          << "consistent with the .h5m model.\n\nThe materials which mapped to subdomain "
+          << s.first << " are:\n";
 
       for (const auto & m : s.second)
         msg << "\n" << materialName(m);
@@ -1060,8 +1069,9 @@ OpenMCCellAverageProblem::gatherCellSum(std::vector<T> & local,
 
 template <typename T>
 void
-OpenMCCellAverageProblem::gatherCellVector(std::vector<T> & local, std::vector<unsigned int> & n_local,
-  std::map<cellInfo, std::vector<T>> & global)
+OpenMCCellAverageProblem::gatherCellVector(std::vector<T> & local,
+                                           std::vector<unsigned int> & n_local,
+                                           std::map<cellInfo, std::vector<T>> & global)
 {
   global.clear();
   _communicator.allgather(n_local);
@@ -1480,7 +1490,8 @@ OpenMCCellAverageProblem::getMaterialFills()
     auto is_material_cell = materialFill(cell_info, material_index);
 
     if (!is_material_cell)
-      mooseError("Density transfer does not currently support cells filled with universes or lattices!");
+      mooseError(
+          "Density transfer does not currently support cells filled with universes or lattices!");
 
     _cell_to_material[cell_info] = material_index;
     vt.addRow(printCell(cell_info), materialID(material_index));
@@ -1488,8 +1499,10 @@ OpenMCCellAverageProblem::getMaterialFills()
 
   if (_verbose && _specified_density_feedback)
   {
-    _console << "\n ===================>       OPENMC MATERIAL MAPPING       <====================\n" << std::endl;
-    _console <<   "           Cell:  OpenMC cell receiving density feedback" << std::endl;
+    _console
+        << "\n ===================>       OPENMC MATERIAL MAPPING       <====================\n"
+        << std::endl;
+    _console << "           Cell:  OpenMC cell receiving density feedback" << std::endl;
     _console << "       Material:  OpenMC material ID in this cell (-1 for void)\n" << std::endl;
     vt.print(_console);
   }
@@ -1739,7 +1752,8 @@ OpenMCCellAverageProblem::cacheContainedCells()
 
     std::map<cellInfo, containedCells> checking_cell_fills;
     for (const auto & c : _cell_to_elem)
-      setContainedCells(c.first, transformPointToOpenMC(_cell_to_point[c.first]), checking_cell_fills);
+      setContainedCells(
+          c.first, transformPointToOpenMC(_cell_to_point[c.first]), checking_cell_fills);
 
     std::map<cellInfo, containedCells> current_cell_fills;
     for (const auto & c : _cell_to_elem)
@@ -2161,6 +2175,39 @@ OpenMCCellAverageProblem::findCell(const Point & point)
   return !openmc::exhaustive_find_cell(_particle);
 }
 
+FunctionSeries*
+OpenMCCellAverageProblem::makeFunctionSeries(std::string name, std::string series_type,
+                                             std::vector<unsigned int> orders, std::vector<Real> bounds)
+{
+  InputParameters _params = _factory.getValidParams("FunctionSeries");
+
+  if (series_type == "Cartesian")
+  {
+    _params.set<MooseEnum>("series_type") = "Cartesian";
+    for (std::string dim: std::vector{"x","y","z"})
+    {
+      _params.set<MooseEnum>(dim) = "Legendre";
+    }
+    _params.set<std::vector<unsigned int>>("orders") = orders;
+    _params.set<std::vector<Real>>("physical_bounds") = bounds;
+  }
+
+  if (series_type == "CylindricalDuo")
+  {
+    _params.set<MooseEnum>("series_type") = "CylindricalDuo";
+    _params.set<MooseEnum>("z") = "Legendre";
+    _params.set<MooseEnum>("disc") = "Zernike";
+    _params.set<std::vector<unsigned>>("orders") = orders;
+    _params.set<std::vector<Real>>("physical_bounds") = bounds;
+
+  }
+  _params.set<MooseEnum>("expansion_type") = "orthonormal";
+  addFunction("FunctionSeries", name, _params);
+
+  auto function = dynamic_cast<FunctionSeries*>(&getFunction(name));
+  return function;
+}
+
 void
 OpenMCCellAverageProblem::addExternalVariables()
 {
@@ -2266,6 +2313,19 @@ OpenMCCellAverageProblem::externalSolve()
   // doesn't intrude with any other postprocessing routines that happen outside this class's purview
   if (_relaxation == relaxation::dufek_gudowski && !firstSolve())
     dufekGudowskiParticleUpdate();
+  else
+  {
+    if (isParamValid("particles"))
+    {
+      if (*_particles <= 0.0)
+        mooseError(
+            "'particles' must be a positive integer. Try `execute_on = 'timestep_begin'` in "
+            "your postprocessor and check that the postprocessor value itself is not less than "
+            "or equal to zero.");
+      int64_t n = std::llround(*_particles);
+      openmc::settings::n_particles = n;
+    }
+  }
 
   OpenMCProblemBase::externalSolve();
 }
@@ -2406,7 +2466,8 @@ OpenMCCellAverageProblem::sendDensityToOpenMC() const
   // collect the volume-density product across local ranks
   std::vector<coupling::CouplingFields> phase = {coupling::density,
                                                  coupling::density_and_temperature};
-  std::map<cellInfo, Real> cell_vol_density = computeVolumeWeightedCellInput(_subdomain_to_density_vars, &phase);
+  std::map<cellInfo, Real> cell_vol_density =
+      computeVolumeWeightedCellInput(_subdomain_to_density_vars, &phase);
 
   for (const auto & c : _cell_to_elem)
   {
@@ -2577,6 +2638,22 @@ OpenMCCellAverageProblem::syncSolutions(ExternalProblem::Direction direction)
       if (_export_properties)
         openmc_properties_export("properties.h5");
 
+      // After setting cell temperatures, we need to re-initialize MGXS data as temperature
+      // interpolation is performed on initialization. Verbosity is temporarily modified here
+      // as the user has seen the MGXS initialization info previously.
+      if (!openmc::settings::run_CE)
+      {
+        auto initial_verbosity = openmc::settings::verbosity;
+        openmc::settings::verbosity = 1;
+        // Clear the MGXS manager.
+        openmc::data::mg = {};
+        // Reload the MGXS data.
+        openmc::data::mg.read_header(openmc::settings::path_cross_sections);
+        openmc::put_mgxs_header_data_to_globals();
+        openmc::finalize_cross_sections();
+        openmc::settings::verbosity = initial_verbosity;
+      }
+
       break;
     }
     case ExternalProblem::Direction::FROM_EXTERNAL_APP:
@@ -2667,7 +2744,9 @@ OpenMCCellAverageProblem::createQRules(QuadratureType type,
   if (type == Moose::stringToEnum<QuadratureType>("GRID") ||
       type == Moose::stringToEnum<QuadratureType>("TRAP"))
     mooseError(
-        "The ", std::to_string(type), " quadrature set will never match the '_current_elem_volume' used to compute\n"
+        "The ",
+        std::to_string(type),
+        " quadrature set will never match the '_current_elem_volume' used to compute\n"
         "integrals in MOOSE. This means that the tally computed by OpenMC is normalized by\n"
         "a different volume than used for MOOSE volume integrations, such that the specified "
         "'power' or 'source_strength'\n"
@@ -2678,7 +2757,8 @@ OpenMCCellAverageProblem::createQRules(QuadratureType type,
 }
 
 void
-OpenMCCellAverageProblem::setMinimumVolumeQRules(Order & volume_order, const std::string & /* type */)
+OpenMCCellAverageProblem::setMinimumVolumeQRules(Order & volume_order,
+                                                 const std::string & /* type */)
 {
   if (volume_order < Moose::stringToEnum<Order>("SECOND"))
     volume_order = SECOND;

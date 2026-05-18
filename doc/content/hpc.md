@@ -21,18 +21,25 @@ for more information.
 
 ## Improv
 
-Last updated on 01/15/2025
+Last updated on 03/06/2026
 
 [Improv](https://docs.lcrc.anl.gov/improv/getting-started-improv/)
 is an [!ac](HPC) system at [!ac](ANL) with 825 AMD EPYC dual-socket
-nodes (128 cores per node).
+nodes (128 cores per node). After loading the `miniforge3/25.3.0` module,
+you will need to pip install two python modules.
+
+```
+pip install pyaml
+pip install jinja2
+```
 
 !listing! language=bash caption=Sample `~/.bashrc` for Improv id=im1
 module purge
 module load gcc/11.4.0
-module load openmpi/5.0.0-gcc-11.4.0
+module load openmpi/4.1.6-gcc-11.4.0-pbs
 module load cmake/3.27.4
-module load anaconda3/2024.10
+module load perl/5.38.0-gcc-11.4.0
+module load miniforge3/25.3.0
 
 export CC=mpicc
 export CXX=mpicxx
@@ -49,7 +56,9 @@ export NEKRS_HOME=$HOME_DIRECTORY_SYM_LINK/cardinal/install
 export OPENMC_CROSS_SECTIONS=$HOME_DIRECTORY_SYM_LINK/cross_sections/endfb-vii.1-hdf5/cross_sections.xml
 !listing-end!
 
-!listing scripts/job_improv language=bash caption=Sample job script for Improv with the `startup` project code id=im2
+!listing scripts/job_improv_nek language=bash caption=Sample job script for Improv with the `startup` project code for a NekRS job id=im2
+
+!listing scripts/job_improv_openmc language=bash caption=Sample job script for Improv with the `startup` project code for an OpenMC job. When using this script, you must modify the PBS selection directive (`select`) and the value of `nodes` to change the number of nodes you're requesting id=im3
 
 ## Bebop
 
@@ -277,8 +286,12 @@ Pinchot is a small Ubuntu server at the University of Illinois hosted in Dr. Nov
 !listing! language=bash caption=Sample `~/.bashrc` for Pinchot id=p1
 
 module load openmpi/ubuntu/5.0.0
-module load hdf5/ubuntu/1.14.3
 module load cmake/3.29.3
+
+# recommend to comment these two lines if using Double-Down so that PETSc will
+# download HDF5 for you
+module load hdf5/ubuntu/1.14.3
+export HDF5_ROOT=/software/HDF5-1.14.3-ubuntu22
 
 # change to your Cardinal location (either the shared location in /shared/data,
 # or to a location in your home directory
@@ -289,7 +302,6 @@ export NEKRS_HOME=$CARDINAL_DIR/install
 export LIBMESH_JOBS=80
 export MOOSE_JOBS=80
 export JOBS=80
-export HDF5_ROOT=/software/HDF5-1.14.3-ubuntu22
 
 # revise for your cross section location
 export OPENMC_CROSS_SECTIONS=/shared/data/endfb-vii.1-hdf5/cross_sections.xml
@@ -299,12 +311,6 @@ export PATH=${PATH}:${NEKRS_HOME}/bin:${CARDINAL_DIR}
 export MOOSE_DIR=$CARDINAL_DIR/contrib/moose
 export PYTHONPATH=$MOOSE_DIR/python:${PYTHONPATH}
 !listing-end!
-
-When building the PETSc dependency using the script, you'll also need to pass an additional flag to ensure that GNU BISON is downloaded during the build process.
-
-```
-./contrib/moose/scripts/update_and_rebuild_petsc.sh --download-bison
-```
 
 ## Sawtooth
 

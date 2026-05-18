@@ -39,13 +39,15 @@
 #include "openmc/state_point.h"
 #include "openmc/tallies/tally.h"
 #include "openmc/tallies/filter_cell_instance.h"
-#include "xtensor/xview.hpp"
 
 // Forward declarations to avoid cyclic dependencies.
 class OpenMCNuclideDensities;
 class OpenMCDomainFilterEditor;
 class OpenMCTallyEditor;
+class OpenMCCellTransform;
 class CriticalitySearchBase;
+
+typedef openmc::tensor::Tensor<double> OMCTensor;
 
 /**
  * Base class for all MOOSE wrappings of OpenMC
@@ -172,7 +174,7 @@ public:
    * @param[in] score tally score
    * @return tally sum within each bin
    */
-  xt::xtensor<double, 1> tallySum(const openmc::Tally * tally, const unsigned int & score) const;
+  OMCTensor tallySum(const openmc::Tally * tally, const unsigned int & score) const;
 
   /**
    * Compute the sum of a tally across all of its bins
@@ -226,9 +228,8 @@ public:
    * @param[in] sum_sq sum of scores squared
    * @param[in] n_realizations number of realizations
    */
-  xt::xtensor<double, 1> relativeError(const xt::xtensor<double, 1> & sum,
-                                       const xt::xtensor<double, 1> & sum_sq,
-                                       const int & n_realizations) const;
+  OMCTensor
+  relativeError(const OMCTensor & sum, const OMCTensor & sum_sq, const int & n_realizations) const;
 
   /**
    * Compute relative error
@@ -243,6 +244,9 @@ public:
    * @return density conversion factor from kg/m3 to g/cm3
    */
   const Real & densityConversionFactor() const { return _density_conversion_factor; }
+
+  /// Number of particles that OpenMC will run in each batch
+  const Real * _particles;
 
   /**
    * Get the number of particles used in the current Monte Carlo calculation
@@ -397,6 +401,9 @@ protected:
   /// Find all userobjects which are changing OpenMC data structures
   void getOpenMCUserObjects();
 
+  /// Whether OpenMC cell transforms are being applied to the geometry
+  bool hasCellTransform() const;
+
   /// Ensure that the IDs of OpenMC objects in UserObjects don't clash
   void checkOpenMCUserObjectIDs() const;
 
@@ -516,6 +523,9 @@ protected:
 
   /// Userobjects for creating/changing OpenMC tallies
   std::vector<OpenMCTallyEditor *> _tally_editor_uos;
+
+  /// Userobjects for updating OpenMC cell transforms
+  std::vector<OpenMCCellTransform *> _cell_transform_uos;
 
   /// Mapping from local element indices to global element indices for this rank
   std::vector<unsigned int> _local_to_global_elem;

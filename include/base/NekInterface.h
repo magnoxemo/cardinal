@@ -65,6 +65,21 @@ void checkFieldValidity(const field::NekFieldEnum & field);
 void checkFieldValidity(const field::NekWriteEnum & field);
 
 /**
+ * Compute y+ on the NekRS mesh
+ * @param[in] boundary_id boundary(s) on which to compute y+
+ * @param[in] index index into nek::scPtr where the wall distance is stored
+ * @return max, min, average y+
+ */
+std::vector<dfloat> yPlus(const std::vector<int> & boundary_id, const unsigned int & index);
+
+/**
+ * Compute the three components of the viscous drag along a given boundary
+ * @param[in] boundary boundary IDs for drag computation
+ * @return components of drag (force fluid exerts on walls)
+ */
+std::vector<dfloat> viscousDrag(const std::vector<int> & boundary);
+
+/**
  * Set the absolute tolerance for checking energy conservation in data transfers to Nek
  * @param[in] tol tolerance
  */

@@ -27,6 +27,7 @@
 #include "OpenMCNuclideDensities.h"
 #include "OpenMCDomainFilterEditor.h"
 #include "OpenMCTallyEditor.h"
+#include "OpenMCCellTransform.h"
 #include "CriticalitySearchBase.h"
 
 #include "openmc/random_lcg.h"
@@ -64,10 +65,9 @@ OpenMCProblemBase::validParams()
       "inactive_batches",
       "inactive_batches >= 0",
       "Number of inactive batches to run in OpenMC; this overrides the setting in the XML files.");
-  params.addRangeCheckedParam<unsigned int>("particles",
-                                            "particles > 0 ",
-                                            "Number of particles to run in each OpenMC batch; this "
-                                            "overrides the setting in the XML files.");
+  params.addParam<PostprocessorName>("particles",
+                                     "Number of particles to run in each OpenMC batch; this "
+                                     "overrides the setting in the XML files.");
   params.addRangeCheckedParam<unsigned int>(
       "batches",
       "batches > 0",
@@ -214,7 +214,7 @@ OpenMCProblemBase::OpenMCProblemBase(const InputParameters & params)
     openmc::settings::n_inactive = getParam<unsigned int>("inactive_batches");
 
   if (isParamValid("particles"))
-    openmc::settings::n_particles = getParam<unsigned int>("particles");
+    _particles = &getPostprocessorValue("particles");
 
   if (isParamValid("batches"))
   {
@@ -362,7 +362,7 @@ OpenMCProblemBase::externalSolve()
     return;
   }
 
-  _console << "Running OpenMC with " << nParticles() << " particles per batch..." << std::endl;
+  _console << " Running OpenMC with " << nParticles() << " particles per batch..." << std::endl;
 
   // apply a new starting fission source
   if (_reuse_source && !firstSolve())
@@ -467,6 +467,7 @@ OpenMCProblemBase::writeSourceBank(const std::string & filename)
 {
   hid_t file_id = openmc::file_open(filename, 'w', true);
   openmc::write_attribute(file_id, "filetype", "source");
+  openmc::write_attribute(file_id, "version", openmc::VERSION_STATEPOINT);
   openmc::write_source_bank(
       file_id, openmc::simulation::source_bank, openmc::simulation::work_index);
   openmc::file_close(file_id);
@@ -650,12 +651,12 @@ OpenMCProblemBase::importProperties() const
   catchOpenMCError(err, "load temperature and density from a properties.h5 file");
 }
 
-xt::xtensor<double, 1>
-OpenMCProblemBase::relativeError(const xt::xtensor<double, 1> & sum,
-                                 const xt::xtensor<double, 1> & sum_sq,
+OMCTensor
+OpenMCProblemBase::relativeError(const OMCTensor & sum,
+                                 const OMCTensor & sum_sq,
                                  const int & n_realizations) const
 {
-  xt::xtensor<double, 1> rel_err = xt::zeros<double>({sum.size()});
+  auto rel_err = openmc::tensor::zeros<double>({sum.size()});
 
   for (unsigned int i = 0; i < sum.size(); ++i)
   {
@@ -672,17 +673,16 @@ OpenMCProblemBase::relativeError(const Real & sum,
                                  const Real & sum_sq,
                                  const int & n_realizations) const
 {
-  Real rel_err = 0.0;
-
   auto mean = sum / n_realizations;
   auto std_dev = std::sqrt((sum_sq / n_realizations - mean * mean) / (n_realizations - 1));
   return mean != 0.0 ? std_dev / std::abs(mean) : 0.0;
 }
 
-xt::xtensor<double, 1>
+OMCTensor
 OpenMCProblemBase::tallySum(const openmc::Tally * tally, const unsigned int & score) const
 {
-  return xt::view(tally->results_, xt::all(), score, static_cast<int>(openmc::TallyResult::SUM));
+  return OMCTensor(tally->results_.slice(
+      openmc::tensor::all, score, static_cast<int>(openmc::TallyResult::SUM)));
 }
 
 double
@@ -694,7 +694,7 @@ OpenMCProblemBase::tallySumAcrossBins(std::vector<const openmc::Tally *> tally,
   for (const auto & t : tally)
   {
     auto mean = tallySum(t, score);
-    sum += xt::sum(mean)();
+    sum += mean.sum();
   }
 
   return sum;
@@ -911,6 +911,8 @@ OpenMCProblemBase::subdomainName(const SubdomainID & id) const
 void
 OpenMCProblemBase::getOpenMCUserObjects()
 {
+  _cell_transform_uos.clear();
+
   TheWarehouse::Query uo_query = theWarehouse().query().condition<AttribSystem>("UserObject");
   std::vector<UserObject *> userobjs;
   uo_query.queryInto(userobjs);
@@ -928,9 +930,19 @@ OpenMCProblemBase::getOpenMCUserObjects()
     OpenMCDomainFilterEditor * f = dynamic_cast<OpenMCDomainFilterEditor *>(u);
     if (f)
       _filter_editor_uos.push_back(f);
+
+    OpenMCCellTransform * t = dynamic_cast<OpenMCCellTransform *>(u);
+    if (t)
+      _cell_transform_uos.push_back(t);
   }
 
   checkOpenMCUserObjectIDs();
+}
+
+bool
+OpenMCProblemBase::hasCellTransform() const
+{
+  return !_cell_transform_uos.empty();
 }
 
 void

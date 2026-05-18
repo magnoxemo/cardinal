@@ -25,6 +25,9 @@
 #include "TallyBase.h"
 #include "FilterBase.h"
 
+/// Functional Expansion include
+#include "FunctionSeries.h"
+
 #ifdef ENABLE_DAGMC
 #include "MoabSkinner.h"
 #include "DagMC.hpp"
@@ -103,6 +106,18 @@ public:
    * (to write into OpenMC cells), and density variable(s) (to write into OpenMC materials)
    */
   virtual void addExternalVariables() override;
+
+  /**
+   * Makes a FunctionSeries for LegendreTally or ZernikeTally
+   * @param[in] name name of the function to create
+   * @param[in] series_type type of function to create: "Cartesian" or "CylindricalDuo"
+   * @param[in] ords orders of the expansion
+   * @param[in] bounds the bounds of the expansion
+   * @return pointer to the function, used to change mutable coefficients
+   */
+  FunctionSeries* makeFunctionSeries(std::string name, std::string series_type,
+                                     std::vector<unsigned int> orders,
+                                     std::vector<Real> bounds);
 
   /**
    * Get the cell volume from a stochastic calculation
@@ -754,7 +769,7 @@ protected:
    * @return whether OpenMC reported an error
    */
   bool findCell(const Point & point);
-
+  
   /**
    * Checks that the contained material cells exactly match between a reference obtained
    * by calling openmc::Cell::get_contained_cells for each cell and a shortcut
@@ -1029,7 +1044,7 @@ protected:
   /// Dummy particle to reduce number of allocations of particles for cell lookup routines
   openmc::Particle _particle;
 
-  /// Number of particles simulated in the first iteration
+  /// Number of particles simulated in the first iteration in Dufek-Gudowski relaxation
   unsigned int _n_particles_1;
 
   /// Mapping from temperature variable name to the subdomains on which to read it from
