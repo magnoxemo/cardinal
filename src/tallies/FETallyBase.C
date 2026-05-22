@@ -72,66 +72,6 @@ FETallyBase::FETallyBase(const InputParameters & parameters)
 
 }
 
-void
-FETallyBase::initializeTally()
-{
-  // Clear cached results.
-  _local_sum_tally.clear();
-  _local_sum_tally.resize(_tally_score.size(), 0.0);
-  _local_mean_tally.clear();
-  _local_mean_tally.resize(_tally_score.size(), 0.0);
-
-  _current_tally.resize(_tally_score.size());
-  _current_raw_tally.resize(_tally_score.size());
-  _current_raw_tally_rel_error.resize(_tally_score.size());
-  _current_raw_tally_std_dev.resize(_tally_score.size());
-  _previous_tally.resize(_tally_score.size());
-
-  if (_needs_global_tally)
-  {
-    _global_sum_tally.clear();
-    _global_sum_tally.resize(_tally_score.size(), 0.0);
-  }
-
-  if (_linked_tallies.size() > 0)
-  {
-    _linked_local_sum_tally.clear();
-    _linked_local_sum_tally.resize(_tally_score.size(), 0.0);
-  }
-
-  // Create the global tally for normalization using the same estimator.
-  if (addingGlobalTally())
-  {
-    _global_tally_index = openmc::model::tallies.size();
-    _global_tally = openmc::Tally::create();
-    _global_tally->set_scores(_tally_score);
-    _global_tally->estimator_ = _estimator;
-  }
-
-  auto [filter_index, spatial_filters] = this->spatialFilters();
-  _filter_index = filter_index;
-
-  std::vector<openmc::Filter *> filters;
-  for (auto & filter : _ext_filters)
-    filters.push_back(filter->getWrappedFilter());
-  /**
-   * We add the functional expansion filters last
-   * to minimize the number of cache misses during
-   * the OpenMC -> Cardinal transfer.
-   */
-  for (auto & filter : spatial_filters)
-  {
-    filters.push_back(filter);
-  }
-
-  // Create the tally, assign the required filters and apply the triggers.
-  _local_tally_index = openmc::model::tallies.size();
-  _local_tally = openmc::Tally::create();
-  _local_tally->set_scores(_tally_score);
-  _local_tally->estimator_ = _estimator;
-  _local_tally->set_filters(filters);
-  applyTriggersToLocalTally(_local_tally);
-}
 
 void
 FETallyBase::resetTally()

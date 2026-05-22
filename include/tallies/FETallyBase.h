@@ -32,7 +32,6 @@ public:
 
   FETallyBase(const InputParameters & parameters);
 
-  virtual void initializeTally() override;
 
   virtual void resetTally() override;
 
