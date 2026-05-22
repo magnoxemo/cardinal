@@ -67,7 +67,7 @@ LegendreTally::LegendreTally(const InputParameters & parameters)
 
 }
 
-std::pair<long unsigned int, std::vector<openmc::Filter *>>
+std::pair<unsigned int, std::vector<openmc::Filter *>>
 LegendreTally::spatialFilters()
 {
 
@@ -81,16 +81,10 @@ LegendreTally::spatialFilters()
   // there I can determine what dimension the user wants.
 
 
+  for (int i = 0; i < _max.size(); ++i)
+    filter->add_axis(static_cast<openmc::LegendreAxis>(i), _orders[i], _min[i], _max[i]);
 
-  for (int i = 0; i < 3; ++i)
-  {
-    filter->set_minmax(_min(i), _max(i));
-    filter->set_order(_orders.at(i));
-    filter->set_axis(static_cast<openmc::LegendreAxis>(i));
-    filters.push_back(static_cast<openmc::Filter *>(filter));
-  }
-
-  return std::make_pair(openmc::model::tally_filters.size() - 3, filters);
+  return std::make_pair(openmc::model::tally_filters.size(), filters);
 }
 
 FunctionSeries*

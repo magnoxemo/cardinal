@@ -29,7 +29,7 @@ public:
 
     LegendreTally(const InputParameters & parameters);
 
-    virtual std::pair<long unsigned int, std::vector<openmc::Filter *>> 
+    virtual std::pair<unsigned int, std::vector<openmc::Filter *>>
     spatialFilters() override;
 
 protected:
