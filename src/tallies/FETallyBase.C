@@ -37,7 +37,7 @@ FETallyBase::validParams()
 
 FETallyBase::FETallyBase(const InputParameters & parameters)
   : TallyBase(parameters),
-    _orders(getParam<std::vector<unsigned>>("orders")),
+    _orders(getParam<std::vector<unsigned int>>("orders")),
     _function_suffix(getParam<std::string>("function_suffix"))
 {
 

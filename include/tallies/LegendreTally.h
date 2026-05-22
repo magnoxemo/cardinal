@@ -40,7 +40,9 @@ protected:
 
     virtual Real getVolume() override {return 8.;};
 
-    Point _min;
+    // lower left corner of the bounding box
+    std::vector<Real> _min;
 
-    Point _max;
+    // upper right corner of the bounding box
+    std::vector<Real> _max;
 };

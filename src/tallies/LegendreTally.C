@@ -28,23 +28,36 @@ LegendreTally::validParams()
 {
   auto params = FETallyBase::validParams();
   params.addClassDescription("A class which implements Legendre expansion tallies.");
-  params.addRequiredParam<Point>("minimum",
+  params.addRequiredParam<std::vector<Real>>("minimum",
                                  "The minimum bounds (x, y, z) for the bounding box.");
-  params.addRequiredParam<Point>("maximum",
+  params.addRequiredParam<std::vector<Real>>("maximum",
                                  "The maximum bounds (x, y, z) for the bounding box.");
   return params;
 }
 
 LegendreTally::LegendreTally(const InputParameters & parameters)
   : FETallyBase(parameters),
-    _min(getParam<Point>("minimum")),
-    _max(getParam<Point>("maximum"))
+    _min(getParam<std::vector<Real>>("minimum")),
+    _max(getParam<std::vector<Real>>("maximum")),
+    _orders()
 {
   //Verifying number of orders passed is correct
   if (_orders.size() != getNumOrders())
     mooseError("Cardinal only supports 3-D, the length of \"orders\" "
                "for "+this->_name+" must be equal to "
                +std::to_string(getNumOrders())+".");
+
+  // checking _min and _max size
+
+  if (_min.size()>3 and _min.size()<1)
+    mooseError("Lower left corner of the bounding box only can be 1D, 2D or 3D");
+
+  if (_max.size()>3 and _max.size()<1)
+      mooseError("Upper right corner of the bounding box only can be 1D, 2D or 3D");
+
+  if (_min.size()!=_max.size() && _min.size()!=_orders.size() )
+    mooseError("Dimention need to match");
+
 
   // initializing functions
   for (std::size_t index = 0; index < _tally_score.size(); ++index)
@@ -60,9 +73,17 @@ LegendreTally::spatialFilters()
 
   std::vector<openmc::Filter*> filters;
 
+  auto filter =
+      dynamic_cast<openmc::SpatialLegendreFilter *>(openmc::Filter::create("spatiallegendre"));
+  // should we allow 1D, 2D FET as well in Cardinal?
+  // ig I will leave that a comment so that I can revisit it later
+  // but for now I can just look a the size of max and min size and from
+  // there I can determine what dimension the user wants.
+
+
+
   for (int i = 0; i < 3; ++i)
   {
-    auto filter = dynamic_cast<openmc::SpatialLegendreFilter *>(openmc::Filter::create("spatiallegendre"));
     filter->set_minmax(_min(i), _max(i));
     filter->set_order(_orders.at(i));
     filter->set_axis(static_cast<openmc::LegendreAxis>(i));
