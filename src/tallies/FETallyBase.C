@@ -57,12 +57,10 @@ FETallyBase::FETallyBase(const InputParameters & parameters)
   /**
      * OpenMC spatial FETs only support the collision estimator
    */
-  if (isParamValid("estimator"))
-  {
+  if (isParamValid("estimator")){
     if (_estimator != openmc::TallyEstimator::COLLISION)
-      paramError("estimator",
-                 "Collision estimators are currently the only compatible "
-                 "estimator type for Spatial Legendre expansion tallies!");
+      paramError("estimator", "Collision estimators are currently the only compatible estimator "
+                              "type for Spatial Legendre expansion tallies!");
   }
   else
     _estimator = openmc::TallyEstimator::COLLISION;

@@ -29,8 +29,7 @@ public:
 
     LegendreTally(const InputParameters & parameters);
 
-    virtual std::pair<unsigned int, std::vector<openmc::Filter *>>
-    spatialFilters() override;
+    virtual std::pair<unsigned int, openmc::Filter *> spatialFilter() override;
 
 protected:
 
@@ -38,7 +37,7 @@ protected:
 
     virtual int getNumOrders()override {return 3;};
 
-    virtual Real getVolume() override {return 8.;};
+    virtual Real getVolume() override;
 
     // lower left corner of the bounding box
     std::vector<Real> _min;

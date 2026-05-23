@@ -37,10 +37,7 @@ public:
 
   virtual void computeSumAndMean() override;
 
-  virtual std::pair<unsigned int, openmc::Filter *> spatialFilter() override
-  {return std::make_pair(0, nullptr);};
-
-  virtual std::pair<long unsigned int, std::vector<openmc::Filter *>> spatialFilters() = 0;
+  virtual std::pair<unsigned int, openmc::Filter *> spatialFilter()=0;
 
 protected:
 
