@@ -114,15 +114,29 @@ Real FETallyBase::storeResultsInner(const std::vector<unsigned int> & var_number
   std::vector<Real> coeffs;
   coeffs.reserve(tally_vals[local_score].size());
   for (std::size_t i = 0; i < tally_vals[local_score].size(); ++i)
-    coeffs.push_back(tally_vals[local_score](i));
+  {
+    auto value = tally_vals[local_score](i)* getNormalizedCoefficients(i);
+    coeffs.push_back(value);
+
+  }
+
 
   _functions[local_score]->setCoefficients(coeffs);
+  /* The main problem with this one is expects 1D tensor or aka vector and row major
+   * */
 
   // The zeroth-order coefficient of the normalized expansion equals the
   // normalized integral over the domain, which must be ≈ 1.0 for a properly
   // constructed FET tally. Return it so that TallyBase::checkNormalization
   // can verify the expansion sums correctly.
+
+  std::cout << "FET coefficients for score " << local_score << ":\n";
+  for (std::size_t i = 0; i < coeffs.size(); ++i)
+    std::cout << "  c[" << i << "] = " << coeffs[i] << "\n";
+
   return coeffs.empty() ? 0.0 : coeffs[0];
 }
+
+
 
 #endif

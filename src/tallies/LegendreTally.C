@@ -29,9 +29,9 @@ LegendreTally::validParams()
   auto params = FETallyBase::validParams();
   params.addClassDescription("A class which implements Legendre expansion tallies.");
   params.addRequiredParam<std::vector<Real>>("minimum",
-                                 "The minimum bounds (x, y, z) for the bounding box.");
+                                             "The minimum bounds (x, y, z) for the bounding box.");
   params.addRequiredParam<std::vector<Real>>("maximum",
-                                 "The maximum bounds (x, y, z) for the bounding box.");
+                                             "The maximum bounds (x, y, z) for the bounding box.");
   return params;
 }
 
@@ -52,7 +52,7 @@ LegendreTally::LegendreTally(const InputParameters & parameters)
     mooseError("Lower left corner of the bounding box only can be 1D, 2D or 3D");
 
   if (_max.size()>3 or _max.size()<1)
-      mooseError("Upper right corner of the bounding box only can be 1D, 2D or 3D");
+    mooseError("Upper right corner of the bounding box only can be 1D, 2D or 3D");
 
   if (_min.size()!=_max.size() or _min.size()!=_orders.size() )
     mooseError("Dimention need to match");
@@ -65,6 +65,21 @@ LegendreTally::LegendreTally(const InputParameters & parameters)
 
 }
 
+
+Real
+LegendreTally::getNormalizedCoefficients(std::size_t index) const
+{
+  Real value = 1;
+  for (unsigned int i = 0; i < _min.size(); i++){
+    value *= 1.0 / (_max[i] - _min[i]);
+  }
+  auto orders = this->decodeBin(static_cast<int>(index));
+  for (auto n : orders)
+  {
+    value *= (2 * n + 1);
+  }
+  return value;  // ← add return
+}
 
 Real LegendreTally::getVolume()
 {
@@ -92,13 +107,27 @@ LegendreTally::spatialFilter()
   return std::make_pair(openmc::model::tally_filters.size(), filter);
 }
 
+std::vector<unsigned int> LegendreTally::decodeBin(int bin) const
+{
+  // Row-major (xyz-major) decode: peel off the fastest-varying axis last.
+
+  std::vector<unsigned int> idx(_orders.size());
+
+  int remainder = bin;
+  for (unsigned int d = static_cast<unsigned int>(_orders.size()) - 1; d >= 0; --d)
+  {
+    idx[d] = remainder % (_orders[d] + 1);
+    remainder /=  _orders[d]+ 1;
+  }
+  return idx;
+}
 
 FunctionSeries*
 LegendreTally::getFunctionSeries(std::string name)
 {
   std::vector<Real> _bounds{_min[0], _max[0], _min[1], _max[1], _min[2], _max[2]};
 
-//  printf("Min %f, %f , %f and max %f, %f , %f", _min[0], _min[1], _min[2],  _max[0],  _max[1], _max[2]);
+  //  printf("Min %f, %f , %f and max %f, %f , %f", _min[0], _min[1], _min[2],  _max[0],  _max[1], _max[2]);
   return _openmc_problem.makeFunctionSeries(name, "Cartesian", _orders, _bounds);
 }
 

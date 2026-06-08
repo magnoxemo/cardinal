@@ -40,6 +40,7 @@ public:
   virtual std::pair<unsigned int, openmc::Filter *> spatialFilter()=0;
 
 protected:
+  virtual Real getNormalizedCoefficients(std::size_t index) const = 0;
 
   virtual Real storeResultsInner(const std::vector<unsigned int> & var_numbers,
                                  unsigned int local_score,

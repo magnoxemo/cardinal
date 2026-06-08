@@ -34,6 +34,11 @@ public:
 protected:
 
     virtual FunctionSeries* getFunctionSeries(std::string name) override;
+    virtual Real getNormalizedCoefficients(std::size_t index) const override;
+
+
+    std::vector<unsigned int> decodeBin(int bin) const;
+
 
     virtual int getNumOrders()override {return 3;};
 
