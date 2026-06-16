@@ -16,26 +16,22 @@
 /*                 See LICENSE for full restrictions                */
 /********************************************************************/
 
-#pragma once
+#ifdef ENABLE_OPENMC_COUPLING
 
-#include "CriticalitySearchBase.h"
+#include "OpenMCSyntax.h"
+#include "ActionFactory.h"
+#include "Syntax.h"
 
-/**
- * Perform a criticality search based on a material
- */
-class OpenMCMaterialSearch : public CriticalitySearchBase
+namespace OpenMC
 {
-public:
-  static InputParameters validParams();
 
-  OpenMCMaterialSearch(const InputParameters & parameters);
+void
+associateSyntax(Syntax & syntax, ActionFactory & action_factory)
+{
+  registerTask("openmc_init", true);
+  addTaskDependency("create_problem", "openmc_init");
+}
 
-  virtual bool changingGeometry() const override { return false; }
+} // namespace OpenMC
 
-protected:
-  /// Material to be modified
-  const int32_t & _material_id;
-
-  /// Material index corresponding to the ID
-  int32_t _material_index;
-};
+#endif

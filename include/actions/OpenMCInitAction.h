@@ -18,24 +18,33 @@
 
 #pragma once
 
-#include "CriticalitySearchBase.h"
+#include "Action.h"
 
 /**
- * Perform a criticality search based on a material
+ * Initialize OpenMC.
  */
-class OpenMCMaterialSearch : public CriticalitySearchBase
+class OpenMCInitAction : public Action
 {
 public:
+  OpenMCInitAction(const InputParameters & parameters);
+
   static InputParameters validParams();
 
-  OpenMCMaterialSearch(const InputParameters & parameters);
-
-  virtual bool changingGeometry() const override { return false; }
+  virtual void act() override;
 
 protected:
-  /// Material to be modified
-  const int32_t & _material_id;
+  /**
+   * Check whether an OpenMCCellAverageProblem have been requested in the input file and returns the
+   * associated path to the XML directory if an OpenMCCellAverageProblem is present in the input
+   * file.
+   * @param[out] xml_directory directory in which OpenMC settings xml files are located
+   * @return whether an OpenMCCellAverageProblem have been requested in the input file
+   */
+  bool isOpenMCCellAverageProblemRequested(std::string & xml_directory) const;
 
-  /// Material index corresponding to the ID
-  int32_t _material_index;
+  /**
+   * Call the OpenMC initialization handle
+   * @param[in] xml_directory directory in which OpenMC settings xml files are located
+   */
+  void initOpenMC(const std::string & xml_directory);
 };

@@ -18,24 +18,12 @@
 
 #pragma once
 
-#include "CriticalitySearchBase.h"
+class Syntax;
+class ActionFactory;
 
-/**
- * Perform a criticality search based on a material
- */
-class OpenMCMaterialSearch : public CriticalitySearchBase
+namespace OpenMC
 {
-public:
-  static InputParameters validParams();
 
-  OpenMCMaterialSearch(const InputParameters & parameters);
+void associateSyntax(Syntax & syntax, ActionFactory & action_factory);
 
-  virtual bool changingGeometry() const override { return false; }
-
-protected:
-  /// Material to be modified
-  const int32_t & _material_id;
-
-  /// Material index corresponding to the ID
-  int32_t _material_index;
-};
+}
