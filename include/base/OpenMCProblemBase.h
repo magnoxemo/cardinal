@@ -48,6 +48,7 @@ class OpenMCDomainFilterEditor;
 class OpenMCTallyEditor;
 class OpenMCCellTransform;
 class CriticalitySearchBase;
+class ModelModifiersBase;
 
 typedef openmc::tensor::Tensor<double> OMCTensor;
 
@@ -81,6 +82,12 @@ public:
    * @return whether the tally from OpenMC has units of eV/src
    */
   bool isHeatingScore(const std::string & score) const;
+
+  /**
+   * The value used to normalize the tallies
+   * @return the source strength or power, depending on the run mode in OpenMC
+   */
+  Real tallyNormalizationValue() const;
 
   /**
    * Whether the random ray solver can accumulate a score or not.
