@@ -29,6 +29,7 @@
 #include "OpenMCVolumeCalculation.h"
 #include "CreateDisplacedProblemAction.h"
 #include "CriticalitySearchBase.h"
+#include "OpenMCCellMaterialFill.h"
 
 #include "openmc/constants.h"
 #include "openmc/cross_sections.h"
@@ -312,9 +313,9 @@ OpenMCCellAverageProblem::OpenMCCellAverageProblem(const InputParameters & param
   else
     checkUnusedParam(params, "first_iteration_particles", "not using Dufek-Gudowski relaxation");
 
-    // OpenMC will throw an error if the geometry contains DAG universes but OpenMC wasn't compiled
-    // with DAGMC. So we can assume that if we have a DAGMC geometry, that we will also by this
-    // point have DAGMC enabled.
+  // OpenMC will throw an error if the geometry contains DAG universes but OpenMC wasn't compiled
+  // with DAGMC. So we can assume that if we have a DAGMC geometry, that we will also by this
+  // point have DAGMC enabled.
 #ifdef ENABLE_DAGMC
   bool has_csg;
   bool has_dag;
@@ -552,6 +553,20 @@ OpenMCCellAverageProblem::initialSetup()
 {
   OpenMCProblemBase::initialSetup();
 
+  // Find ModelModifier objects and store them in _cell_material_modifiers map
+  TheWarehouse::Query mm_query = theWarehouse().query().condition<AttribSystem>("ModelModifiers");
+  std::vector<ModelModifiersBase *> mm_objs;
+  mm_query.queryInto(mm_objs);
+
+  // loop through all queried ModelModifiers and add any OpenMCCellMaterialFill
+  // to the _cell_material_modifiers map
+  for (const auto & m : mm_objs)
+  {
+    auto * modifier = dynamic_cast<OpenMCCellMaterialFill *>(m);
+    if (modifier)
+      _cell_material_modifiers[modifier->getCellIndex()] = modifier;
+  }
+
   getOpenMCUserObjects();
 
   if (_use_displaced && !_using_skinner && !hasCellTransform())
@@ -759,8 +774,6 @@ OpenMCCellAverageProblem::setupProblem()
   _n_openmc_cells = numCells();
 
   initializeElementToCellMapping();
-
-  getMaterialFills();
 
   // we do this last so that we can at least hit any other errors first before
   // spending time on the costly filled cell caching
@@ -1549,41 +1562,6 @@ OpenMCCellAverageProblem::subdomainsToMaterials()
 }
 
 void
-OpenMCCellAverageProblem::getMaterialFills()
-{
-  VariadicTable<std::string, int> vt({"Cell", "Material"});
-
-  _cell_to_material.clear();
-  for (const auto & c : _cell_to_elem)
-  {
-    auto cell_info = c.first;
-
-    if (!hasDensityFeedback(cell_info))
-      continue;
-
-    int32_t material_index;
-    auto is_material_cell = materialFill(cell_info, material_index);
-
-    if (!is_material_cell)
-      mooseError(
-          "Density transfer does not currently support cells filled with universes or lattices!");
-
-    _cell_to_material[cell_info] = material_index;
-    vt.addRow(printCell(cell_info), materialID(material_index));
-  }
-
-  if (_verbose && _specified_density_feedback)
-  {
-    _console
-        << "\n ===================>       OPENMC MATERIAL MAPPING       <====================\n"
-        << std::endl;
-    _console << "           Cell:  OpenMC cell receiving density feedback" << std::endl;
-    _console << "       Material:  OpenMC material ID in this cell (-1 for void)\n" << std::endl;
-    vt.print(_console);
-  }
-}
-
-void
 OpenMCCellAverageProblem::initializeElementToCellMapping()
 {
   /* We consider five different cases here based on how the MOOSE and OpenMC
@@ -1716,6 +1694,9 @@ OpenMCCellAverageProblem::setContainedCells(const cellInfo & cell_info,
 
   openmc::Position p{hint(0), hint(1), hint(2)};
 
+  // we include all material-fill and void cells within the requested cell, because
+  // we may want to add cell tallies in void regions, even if no feedback is applied
+  // to voids
   const auto & cell = openmc::model::cells[cell_info.first];
   if (cell->type_ == openmc::Fill::MATERIAL)
   {
@@ -2468,7 +2449,7 @@ OpenMCCellAverageProblem::sendTemperatureToOpenMC() const
           mooseError("Cell " + std::to_string(cellID(contained.first)) + ", instance " +
                      std::to_string(instance) +
                      " has already had its temperature set by Cardinal to " + std::to_string(T) +
-                     "! This indicates a problem with how you have built your geometry, because "
+                     " K! This indicates a problem with how you have built your geometry, because "
                      "this cell is trying to receive a distribution of temperatures in space, but "
                      "each successive set-temperature operation is only overwriting the previous "
                      "value.\n\nThis error most often appears when you are filling a LATTICE into "
@@ -2490,7 +2471,29 @@ OpenMCCellAverageProblem::sendTemperatureToOpenMC() const
 OpenMCCellAverageProblem::cellInfo
 OpenMCCellAverageProblem::firstContainedMaterialCell(const cellInfo & cell_info) const
 {
+  // this function is only used for displaying temperature and density in auxkernels; to avoid
+  // confusing the user, we return the first cell which is non-void fill - even if we set
+  // the density on a void cell via Cardinal, OpenMC will always be storing a density of zero
+  // because the density multiplier is zero. This could be confusing when reporting the density
+  // in CellDensityAux of a cell containing multiple nested cells and if void happens to be the
+  // first of those contained cells. So, we screen it out here.
+
   const auto & contained_cells = containedMaterialCells(cell_info);
+  for (const auto & c : contained_cells)
+  {
+    const auto & cell = openmc::model::cells[c.first];
+    for (const auto & instance : c.second)
+    {
+      const auto mat_index = cell->material(instance);
+      if (mat_index != openmc::MATERIAL_VOID)
+      {
+        cellInfo first_cell = {c.first, instance};
+        return first_cell;
+      }
+    }
+  }
+
+  // if the cell only contains void, then we'll return that
   const auto & instances = contained_cells.begin()->second;
   cellInfo first_cell = {contained_cells.begin()->first, instances[0]};
   return first_cell;
@@ -2514,10 +2517,11 @@ OpenMCCellAverageProblem::sendDensityToOpenMC() const
   std::map<cellInfo, Real> cell_vol_density =
       computeVolumeWeightedCellInput(_subdomain_to_density_vars, &phase, scaling);
 
+  std::unordered_set<cellInfo> cells_already_set;
+
   for (const auto & c : _cell_to_elem)
   {
     auto cell_info = c.first;
-
     if (!hasDensityFeedback(cell_info))
       continue;
 
@@ -2536,7 +2540,35 @@ OpenMCCellAverageProblem::sendDensityToOpenMC() const
                  << " to MGXS density (-): " << std::setw(4) << average_density << std::endl;
     }
 
-    setCellDensity(average_density, cell_info);
+    containedCells contained_cells = containedMaterialCells(cell_info);
+
+    for (const auto & contained : contained_cells)
+    {
+      for (const auto & instance : contained.second)
+      {
+        cellInfo ci = {contained.first, instance};
+        if (cells_already_set.count(ci))
+        {
+          double rho;
+          openmc_cell_get_density(ci.first, &ci.second, &rho);
+
+          mooseError(
+              "Cell " + std::to_string(cellID(contained.first)) + ", instance " +
+              std::to_string(instance) + " has already had its density set by Cardinal to " +
+              std::to_string(rho) +
+              " g/cm3! This indicates a problem with how you have built your geometry, because "
+              "this cell is trying to receive a distribution of densities in space, but "
+              "each successive set-density operation is only overwriting the previous "
+              "value.\n\nThis error most often appears when you are filling a LATTICE into "
+              "multiple cells. One fix is to first place that lattice into a universe, and "
+              "then fill that UNIVERSE into multiple cells.\n\nFor more information, please "
+              "consult https://github.com/neams-th-coe/cardinal/pull/918.");
+        }
+
+        cells_already_set.insert(ci);
+        setCellDensity(contained.first, instance, average_density, cell_info);
+      }
+    }
   }
 
   if (!_verbose)
@@ -2858,6 +2890,21 @@ OpenMCCellAverageProblem::cellMappedVolume(const cellInfo & cell_info) const
 }
 
 double
+OpenMCCellAverageProblem::cellDensity(const cellInfo & cell_info, const Elem * elem) const
+{
+  auto material_cell = firstContainedMaterialCell(cell_info);
+
+  double density;
+  int err = openmc_cell_get_density(material_cell.first, &material_cell.second, &density);
+  catchOpenMCError(err, "get density of cell " + printCell(cell_info));
+
+  // Rescale by the reference density, if required.
+  const auto ref_den = getReferenceDensity(elem);
+
+  return ref_den * density / densityConversionFactor();
+}
+
+double
 OpenMCCellAverageProblem::cellTemperature(const cellInfo & cell_info) const
 {
   auto material_cell = firstContainedMaterialCell(cell_info);
@@ -2904,6 +2951,10 @@ OpenMCCellAverageProblem::reloadDAGMC()
 
   _console << "Re-generating OpenMC model with " << openmc::model::cells.size() << " cells... "
            << std::endl;
+
+  // Clear cells on all surviving universes.
+  for (auto & universe : openmc::model::universes)
+    universe->cells_.clear();
 
   // Add cells to universes
   openmc::populate_universes();
@@ -3327,13 +3378,36 @@ OpenMCCellAverageProblem::materialsInCells(const containedCells & contained_cell
   std::vector<int32_t> mats;
   for (const auto & contained : contained_cells)
   {
-    for (const auto & instance : contained.second)
+    if (_cell_material_modifiers.find(contained.first) != _cell_material_modifiers.end())
     {
-      // we know this is a material cell, so we don't need to check that the fill is material
-      int32_t material_index;
-      cellInfo cell_info = {contained.first, instance};
-      materialFill(cell_info, material_index);
-      mats.push_back(material_index);
+      // find the iterator corresponding to the ModelModifier corresponding to the contained
+      // cell's index
+      std::vector<int32_t> modifier_mats =
+          _cell_material_modifiers.at(contained.first)->getMaterialIndices();
+      // insert exactly as many entries from the _material_indices vector as there are cell
+      // instances into the current mats vector, which in most cases is the same number
+
+      // NOTE: for TRISO problems, when contained corresponds to a TRISO cell it is possible
+      // that modifier_mats has many more entries than the actual number of intances of the
+      // contained cell here.
+
+      // This occurs when using the material_ids_file to do zoning, which assigns a material
+      // as many materials as there are instances of this cell in the containing cell.
+      // This case is why the below does not go to modifier_mats.end(), i.e. modifier_mats.end()
+      // does not always have to equal modifier_mats.begin() + contained.second.size().
+      mats.insert(
+          mats.end(), modifier_mats.begin(), modifier_mats.begin() + contained.second.size());
+    }
+    else
+    {
+      for (const auto & instance : contained.second)
+      {
+        // we know this is a material cell, so we don't need to check that the fill is material
+        int32_t material_index;
+        cellInfo cell_info = {contained.first, instance};
+        materialFill(cell_info, material_index);
+        mats.push_back(material_index);
+      }
     }
   }
 
@@ -3349,5 +3423,16 @@ OpenMCCellAverageProblem::transformPointToOpenMC(const Point & pt) const
   pnt_out *= _scaling;
 
   return pnt_out;
+}
+
+int
+OpenMCCellAverageProblem::numContainedMaterialCells(const cellInfo & cell_info) const
+{
+  int n_contained = 0;
+  auto contained_cells = containedMaterialCells(cell_info);
+  for (const auto & cell : contained_cells)
+    n_contained += cell.second.size();
+
+  return n_contained;
 }
 #endif
