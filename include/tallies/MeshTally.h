@@ -64,6 +64,12 @@ public:
   virtual bool addingGlobalTally() const override { return _needs_global_tally && _instance == 0; }
 
 protected:
+  /// Create the (not yet configured) OpenMC filter that spans the tally mesh. Override to tally with a different mesh filter type.
+  virtual openmc::MeshFilter * createMeshFilter();
+
+  /// Called by spatialFilter() once the mesh and translation have been set on '_mesh_filter'.
+  virtual void configureMeshFilter() {}
+
   /**
    * A function which stores the results of this tally into the created
    * auxvariables. This implements the copy transfer between the tally mesh and the MOOSE mesh.

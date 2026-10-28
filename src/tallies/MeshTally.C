@@ -176,14 +176,21 @@ MeshTally::spatialFilter()
   _mesh_template->set_id(-1);
   _mesh_template->output_ = false;
 
-  _mesh_filter = dynamic_cast<openmc::MeshFilter *>(openmc::Filter::create("mesh"));
+  _mesh_filter = createMeshFilter();
   _mesh_filter->set_mesh(_mesh_index);
   _mesh_filter->set_translation({_mesh_translation(0), _mesh_translation(1), _mesh_translation(2)});
+  configureMeshFilter();
 
   // Validate the mesh filters to make sure we can run a copy transfer to the [Mesh].
   checkMeshTemplateAndTranslations();
 
   return std::make_pair(openmc::model::tally_filters.size() - 1, _mesh_filter);
+}
+
+openmc::MeshFilter *
+MeshTally::createMeshFilter()
+{
+  return dynamic_cast<openmc::MeshFilter *>(openmc::Filter::create("mesh"));
 }
 
 void
