@@ -96,15 +96,19 @@ public:
   bool validRandomRayScore(const std::string & score) const;
 
   /**
-   * Add a constant monomial auxiliary variable
+   * Add an auxiliary variable (a constant monomial by default)
    * @param[in] name name of the variable
    * @param[in] block optional subdomain names on which to restrict the variable
    * @param[in] system an optional string for the system adding a variable (to improve debugging)
+   * @param[in] family finite element family of the variable
+   * @param[in] order finite element order of the variable
    * @return numeric index for the variable in the auxiliary system
    */
   unsigned int addExternalVariable(const std::string & name,
                                    const std::string & system,
-                                   const std::vector<SubdomainName> * block = nullptr);
+                                   const std::vector<SubdomainName> * block = nullptr,
+                                   const std::string & family = "MONOMIAL",
+                                   const std::string & order = "CONSTANT");
 
   /**
    * Get the scaling value applied to the [Mesh] to convert to OpenMC's centimeters units

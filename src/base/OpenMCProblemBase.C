@@ -996,11 +996,13 @@ OpenMCProblemBase::validRandomRayScore(const std::string & score) const
 unsigned int
 OpenMCProblemBase::addExternalVariable(const std::string & name,
                                        const std::string & system,
-                                       const std::vector<SubdomainName> * block)
+                                       const std::vector<SubdomainName> * block,
+                                       const std::string & family,
+                                       const std::string & order)
 {
   auto var_params = _factory.getValidParams("MooseVariable");
-  var_params.set<MooseEnum>("family") = "MONOMIAL";
-  var_params.set<MooseEnum>("order") = "CONSTANT";
+  var_params.set<MooseEnum>("family") = family;
+  var_params.set<MooseEnum>("order") = order;
 
   if (block)
     var_params.set<std::vector<SubdomainName>>("block") = *block;
