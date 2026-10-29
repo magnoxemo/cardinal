@@ -1,6 +1,8 @@
 #ifdef ENABLE_OPENMC_COUPLING
 #include "FETMeshTally.h"
 
+#include "AuxiliarySystem.h"
+
 #include "openmc/fet/dubiner.h"
 
 registerMooseObject("CardinalApp", FETMeshTally);
@@ -43,7 +45,9 @@ FETMeshTally::createMeshFilter()
 void
 FETMeshTally::configureMeshFilter()
 {
-  // must happen before the tally allocates its results
+  // must happen before the tally allocates its result
+  // I am leaving that as a future note to myself that doing uniform P refinement
+  // is one of the dumbest thing I can do. But that's a worry for post prelim Walid
   _mesh_fet_filter->set_order(_order);
 }
 
@@ -82,21 +86,25 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       for (int i = 0; i < n_modes; ++i)
         values[i] = tally_vals[local_score](ext_bin * n_bins + first + i) * factor;
 
-      // Average over the element: only the zeroth mode contributes, which is evaluated with
-      // the same basis (orientation and normalization) as the filter.
-      // (the filter removes its translation internally, so add it to the mesh-frame centroid)
-      const auto centroid = _mesh_template->centroid(e) + _mesh_filter->translation();
-      std::vector<Real> psi(openmc::fet::MAX_MODES_TET);
-      _mesh_fet_filter->evaluate_basis(e, centroid, psi.data());
-      const auto m0 = openmc::fet::tet_mode_norm_sq(0, 0, 0);
-      const Real average = m0 * values[0] * psi[0] / _mesh_fet_filter->volume(e);
-
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : tally_vals[local_score](ext_bin * n_bins + first);
 
       auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
 
-      // maybe not the best one ig? If we plan to fill up nodal variable
-      fillElementalAuxVariable(var, {e}, average);
+      // the variable is a discontinuous linear Lagrange variable, so there is one dof per
+      // vertex; evaluate the expansion at each vertex (the filter removes its translation
+      // internally, so add it to the position, same as in reconstruct())
+      const auto * elem = _openmc_problem.getMooseMesh().queryElemPtr(e);
+      if (_openmc_problem.isLocalElem(elem))
+      {
+        auto & solution = _aux.solution();
+        for (unsigned int n = 0; n < elem->n_vertices(); ++n)
+        {
+          const auto r = elem->point(n) * _openmc_problem.scaling() + _mesh_translation;
+          const Real nodal = _mesh_fet_filter->reconstruct(
+              e, openmc::Position(r(0), r(1), r(2)), values.data());
+          solution.set(elem->dof_number(_aux.number(), var, n), nodal);
+        }
+      }
 
       if (norm_by_src_rate)
         std::copy(values.begin(), values.end(), _modal_values[local_score][ext_bin].begin() + first);
