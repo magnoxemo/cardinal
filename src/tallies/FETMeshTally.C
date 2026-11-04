@@ -1,9 +1,9 @@
 #ifdef ENABLE_OPENMC_COUPLING
 #include "FETMeshTally.h"
-
 #include "AuxiliarySystem.h"
 
-#include "openmc/fet/dubiner.h"
+
+#include "openmc/fet/fet_element.h"
 
 registerMooseObject("CardinalApp", FETMeshTally);
 
@@ -78,7 +78,7 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
     for (int e = 0; e < n_elem; ++e)
     {
       const auto first = _mesh_fet_filter->offset(e); // the first index of the element offset
-      const auto n_modes = openmc::fet::n_modes_tet(_mesh_fet_filter->order(e));
+      const int n_modes = _mesh_fet_filter->element(e).n_modes();
       if (n_modes == 0)
         continue;
 
@@ -100,8 +100,8 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
         for (unsigned int n = 0; n < elem->n_vertices(); ++n)
         {
           const auto r = elem->point(n) * _openmc_problem.scaling() + _mesh_translation;
-          const Real nodal = _mesh_fet_filter->reconstruct(
-              e, openmc::Position(r(0), r(1), r(2)), values.data());
+          const Real nodal = _mesh_fet_filter->reconstruct( e, openmc::Position(r(0), r(1), r(2)), values.data());
+          // std::cout<<"x: "<<r(0)<< " y : "<<r(1)<<" z: "<< r(2)<<" value = "<<nodal<<std::endl;
           solution.set(elem->dof_number(_aux.number(), var, n), nodal);
         }
       }
@@ -123,7 +123,7 @@ FETMeshTally::reconstruct(const libMesh::Elem * elem,
   const int e = elem->id();
   if (local_score >= _modal_values.size() || ext_bin >= _modal_values[local_score].size())
     mooseError("The tally results have not been stored yet; cannot reconstruct the expansion.");
-  if (_mesh_fet_filter->order(e) < 0)
+  if (_mesh_fet_filter->element(e).n_modes() == 0)
     return 0.0;
 
   // positions in OpenMC are scaled; the filter removes its own translation internally, so add

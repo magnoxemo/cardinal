@@ -170,6 +170,12 @@ public:
    */
   const std::vector<std::string> & getAuxVarNames() const { return _tally_name; }
 
+  /// Finite element family of the auxvariables which store this tally's results
+  virtual std::string auxVariableFamily() const { return "MONOMIAL"; }
+
+  /// Finite element order of the auxvariables which store this tally's results
+  virtual std::string auxVariableOrder() const { return "CONSTANT"; }
+
   /**
    * Gets the output names to append to the end of the '_tally_name' when adding tally auxvariables
    * for additional outputs.

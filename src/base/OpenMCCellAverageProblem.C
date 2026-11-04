@@ -2374,7 +2374,11 @@ OpenMCCellAverageProblem::addExternalVariables()
         _tally_var_ids[i].push_back(
             _tally_var_ids[previous_valid_name_index][j]); // Use variables from first in sequence.
       else
-        _tally_var_ids[i].push_back(addExternalVariable(names[j], "Tally", &block_name_vec));
+        _tally_var_ids[i].push_back(addExternalVariable(names[j],
+                                                              "Tally",
+                                                              &block_name_vec,
+                                                              _local_tallies[i]->auxVariableFamily(),
+                                                              _local_tallies[i]->auxVariableOrder()));
 
       if (_local_tallies[i]->hasOutputs())
       {
@@ -2387,7 +2391,11 @@ OpenMCCellAverageProblem::addExternalVariables()
                 _tally_ext_var_ids[previous_valid_name_index][k]
                                   [j]); // Use variables from first in sequence.
           else
-            _tally_ext_var_ids[i][k].push_back(addExternalVariable(n, "Tally", &block_name_vec));
+            _tally_ext_var_ids[i][k].push_back(addExternalVariable(n,
+                                                                 "Tally",
+                                                                 &block_name_vec,
+                                                                 _local_tallies[i]->auxVariableFamily(),
+                                                                 _local_tallies[i]->auxVariableOrder()));
         }
       }
     }

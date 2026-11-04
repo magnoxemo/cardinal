@@ -6,8 +6,8 @@
 
 /**
  * An unstructured mesh tally which expands the tally within each (linear tetrahedral) element
- * in an orthogonal functional expansion basis. The element average (zeroth mode) is written to
- * the elemental auxvariables, and the full expansion can be evaluated at arbitrary points with
+ * in an orthogonal functional expansion basis. The expansion is evaluated at the
+ * vertices of each element and written to discontinuous linear (L2_LAGRANGE) auxvariables, and the full expansion can be evaluated at arbitrary points with
  * reconstruct().
  */
 class FETMeshTally : public MeshTally
@@ -30,6 +30,10 @@ public:
                    unsigned int local_score = 0,
                    unsigned int ext_bin = 0) const;
 
+  /// The expansion is written to discontinuous linear Lagrange variables (one value per vertex)
+  virtual std::string auxVariableFamily() const override { return "L2_LAGRANGE"; }
+  virtual std::string auxVariableOrder() const override { return "SECOND"; }
+
   /// Expansion order used on every element.
   int order() const { return _order; }
 
@@ -38,7 +42,7 @@ protected:
   virtual void configureMeshFilter() override;
 
   /**
-   * Stores the zeroth mode (the element average) in the aux variables, and caches the normalized
+   * Stores the expansion evaluated at each element vertex in the aux variables, and caches the normalized
    * modal values for reconstruct().
    */
   virtual Real storeResultsInner(const std::vector<unsigned int> & var_numbers,
