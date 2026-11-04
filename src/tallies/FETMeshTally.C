@@ -15,11 +15,16 @@ FETMeshTally::validParams()
       "A class which implements unstructured mesh tallies expanded in a functional expansion "
       "basis within each element. Only linear tetrahedral elements are supported.");
   params.addRequiredParam<int>("order", "Functional expansion order used on every element");
+  params.addParam<std::string>("family","L2_LAGRANGE", "Nodal element type to be stored on the mesh"
+                                                       "for visualization");
+  params.addParam<std::string>("order", "SECOND", "Order of the nodal element type");
   return params;
 }
 
 FETMeshTally::FETMeshTally(const InputParameters & parameters)
-  : MeshTally(parameters), _order(getParam<int>("order"))
+  : MeshTally(parameters), _order(getParam<int>("order")),
+    _family(getParam<std::string>("family")),
+    _nodal_variable_order(getParam<std::string>("nodal_variable_order"))
 {
   if (_order < 0 || _order > openmc::fet::MAX_ORDER)
     paramError("order",

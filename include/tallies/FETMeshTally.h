@@ -31,8 +31,8 @@ public:
                    unsigned int ext_bin = 0) const;
 
   /// The expansion is written to discontinuous linear Lagrange variables (one value per vertex)
-  virtual std::string auxVariableFamily() const override { return "L2_LAGRANGE"; }
-  virtual std::string auxVariableOrder() const override { return "SECOND"; }
+  virtual std::string auxVariableFamily() const override { return _family; }
+  virtual std::string auxVariableOrder() const override { return _nodal_variable_order; }
 
   /// Expansion order used on every element.
   int order() const { return _order; }
@@ -61,4 +61,7 @@ protected:
 
   /// Normalized modal values, indexed by [local score][ext bin][filter bin]
   std::vector<std::vector<std::vector<Real>>> _modal_values;
+
+  const std::string _family;
+  const std::string _nodal_variable_order;
 };
