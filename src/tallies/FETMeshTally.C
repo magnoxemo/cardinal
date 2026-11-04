@@ -17,7 +17,7 @@ FETMeshTally::validParams()
   params.addRequiredParam<int>("order", "Functional expansion order used on every element");
   params.addParam<std::string>("family","L2_LAGRANGE", "Nodal element type to be stored on the mesh"
                                                        "for visualization");
-  params.addParam<std::string>("order", "SECOND", "Order of the nodal element type");
+  params.addParam<std::string>("nodal_variable_order", "SECOND", "Order of the nodal element type");
   return params;
 }
 
