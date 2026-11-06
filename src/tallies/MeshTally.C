@@ -131,35 +131,7 @@ MeshTally::spatialFilter()
     // Adaptivity and block restriction both require a map from the element subsets we want to
     // tally on to the full mesh.
     if (_use_dof_map)
-    {
-      _bin_to_element_mapping.clear();
-
-      auto begin = _tally_blocks.size() > 0
-                       ? msh->active_subdomain_set_elements_begin(_tally_blocks)
-                       : msh->active_elements_begin();
-      auto end = _tally_blocks.size() > 0 ? msh->active_subdomain_set_elements_end(_tally_blocks)
-                                          : msh->active_elements_end();
-
-      unsigned int max_elem_id = 0;
-      for (const auto & old_elem : libMesh::as_range(begin, end))
-      {
-        max_elem_id = std::max(max_elem_id, static_cast<unsigned int>(old_elem->id()));
-        _bin_to_element_mapping.push_back(old_elem->id());
-      }
-      _bin_to_element_mapping.shrink_to_fit();
-
-      // The dual mapping is only required when applying relaxation with adaptive
-      // mesh tallies.
-      if (_is_adaptive && _relaxation_type != relaxation::none)
-      {
-        _element_to_bin_mapping.clear();
-        _element_to_bin_mapping.resize(max_elem_id + 1, INVALID_TALLY_BIN);
-        for (size_t i = 0; i < _bin_to_element_mapping.size(); ++i)
-          _element_to_bin_mapping[_bin_to_element_mapping[i]] = i;
-
-        _element_to_bin_mapping.shrink_to_fit();
-      }
-    }
+      buildDofMap(*msh);
 
     openmc::model::meshes.emplace_back(std::make_unique<openmc::AdaptiveLibMesh>(
         _openmc_problem.getMooseMesh().getMesh(), _openmc_problem.scaling(), _tally_blocks));
@@ -185,6 +157,38 @@ MeshTally::spatialFilter()
   checkMeshTemplateAndTranslations();
 
   return std::make_pair(openmc::model::tally_filters.size() - 1, _mesh_filter);
+}
+
+
+void
+MeshTally::buildDofMap(const libMesh::ReplicatedMesh & msh)
+{
+
+  _bin_to_element_mapping.clear();
+  auto begin = _tally_blocks.size() > 0
+                   ? msh.active_subdomain_set_elements_begin(_tally_blocks)
+                   : msh.active_elements_begin();
+  auto end = _tally_blocks.size() > 0 ? msh.active_subdomain_set_elements_end(_tally_blocks)
+                                      : msh.active_elements_end();
+
+  unsigned int max_elem_id = 0;
+  for (const auto & old_elem : libMesh::as_range(begin, end))
+  {
+    max_elem_id = std::max(max_elem_id, static_cast<unsigned int>(old_elem->id()));
+    _bin_to_element_mapping.push_back(old_elem->id());
+  }
+  _bin_to_element_mapping.shrink_to_fit();
+
+  // The dual mapping is only required when applying relaxation with adaptive mesh tallies.
+  if (needsElementToBinMap())
+  {
+    _element_to_bin_mapping.clear();
+    _element_to_bin_mapping.resize(max_elem_id + 1, INVALID_TALLY_BIN);
+    for (size_t i = 0; i < _bin_to_element_mapping.size(); ++i)
+      _element_to_bin_mapping[_bin_to_element_mapping[i]] = i;
+
+    _element_to_bin_mapping.shrink_to_fit();
+  }
 }
 
 openmc::MeshFilter *
@@ -265,8 +269,11 @@ MeshTally::checkMeshTemplateAndTranslations()
   // copy transfer that necessitates the meshes to have the same elements in the same order). In
   // other words, you might have two meshes that represent the same geometry, the element ordering
   // could be different.
-  unsigned int mesh_offset = _instance * _mesh_filter->n_bins();
-  for (int e = 0; e < _mesh_filter->n_bins(); ++e)
+  // Loop over the mesh elements (not the filter bins, since a filter may have several bins per
+  // element, e.g. the functional expansion filter).
+  const int n_mesh_elems = _mesh_template->n_bins();
+  unsigned int mesh_offset = _instance * n_mesh_elems;
+  for (int e = 0; e < n_mesh_elems; ++e)
   {
     auto elem_id = _use_dof_map ? _bin_to_element_mapping[e] : mesh_offset + e;
     auto elem_ptr = _openmc_problem.getMooseMesh().queryElemPtr(elem_id);

@@ -38,6 +38,9 @@ public:
   int order() const { return _order; }
 
 protected:
+  /// reconstruct() needs the element-to-bin map whenever block restriction is used
+  virtual bool needsElementToBinMap() const override { return _use_dof_map; }
+
   virtual openmc::MeshFilter * createMeshFilter() override;
   virtual void configureMeshFilter() override;
 

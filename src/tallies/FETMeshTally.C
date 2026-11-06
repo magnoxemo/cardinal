@@ -31,14 +31,20 @@ FETMeshTally::FETMeshTally(const InputParameters & parameters)
                "The expansion order must be between 0 and " +
                    std::to_string(openmc::fet::MAX_ORDER) + "!");
 
+  // The nodal values are written with Elem::dof_number(), which is only valid for variables whose
+  // dofs live on the element (discontinuous families); continuous families would write out of bounds.
+  if (_family != "L2_LAGRANGE")
+    paramError("family", "Functional expansion mesh tallies only support 'L2_LAGRANGE'!");
+
   // The filter has one bin per (element, mode), so the element-wise copy and relaxation
   // machinery of the mesh tally does not apply.
-  if (_use_dof_map)
-    mooseError("Functional expansion mesh tallies do not yet support adaptivity or block "
-               "restriction!");
+  if (_is_adaptive)
+    mooseError("Functional expansion mesh tallies do not support adaptivity!");
   if (_instance != 0)
     mooseError("Functional expansion mesh tallies do not support multiple mesh translations!");
 }
+
+
 
 openmc::MeshFilter *
 FETMeshTally::createMeshFilter()
@@ -84,12 +90,26 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
     {
       const auto first = _mesh_fet_filter->offset(e); // the first index of the element offset
       const int n_modes = _mesh_fet_filter->element(e).n_modes();
+      //
+      // if (e ==0 )
+      // {
+      //   std::cout<<"element id ="<<e <<"number of modes = "<< n_modes <<std::endl;
+      //
+      //   const openmc::fet::FETElement& fet_element = _mesh_fet_filter->element(e);
+      //   for (const auto order : fet_element.orders())
+      //     std::cout<<"element order = "<<order<<std::endl;
+      // }
       if (n_modes == 0)
         continue;
 
       std::vector<Real> values(n_modes);
       for (int i = 0; i < n_modes; ++i)
+      {
+        // std::cout<<"mode index "<<i <<" modal values "<<
+        //   tally_vals[local_score](ext_bin * n_bins + first + i)<<std::endl;
         values[i] = tally_vals[local_score](ext_bin * n_bins + first + i) * factor;
+      }
+
 
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : tally_vals[local_score](ext_bin * n_bins + first);
 
@@ -98,15 +118,19 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       // the variable is a discontinuous linear Lagrange variable, so there is one dof per
       // vertex; evaluate the expansion at each vertex (the filter removes its translation
       // internally, so add it to the position, same as in reconstruct())
-      const auto * elem = _openmc_problem.getMooseMesh().queryElemPtr(e);
-      if (_openmc_problem.isLocalElem(elem))
+      const auto * elem = _openmc_problem.getMooseMesh().queryElemPtr(_use_dof_map ? _bin_to_element_mapping[e] : e);
+      if (elem && _openmc_problem.isLocalElem(elem))
       {
         auto & solution = _aux.solution();
         for (unsigned int n = 0; n < elem->n_vertices(); ++n)
         {
           const auto r = elem->point(n) * _openmc_problem.scaling() + _mesh_translation;
           const Real nodal = _mesh_fet_filter->reconstruct( e, openmc::Position(r(0), r(1), r(2)), values.data());
-          // std::cout<<"x: "<<r(0)<< " y : "<<r(1)<<" z: "<< r(2)<<" value = "<<nodal<<std::endl;
+          if (nodal <= 0)
+            std::cout << "NEG elem " << elem->id() << " bin " << e << " vertex " << n << " score "
+                      << local_score << " x: " << r(0) << " y: " << r(1) << " z: " << r(2)
+                      << " value = " << nodal << " mean = " << values[0] / _mesh_fet_filter->element(e).volume()
+                      << std::endl;
           solution.set(elem->dof_number(_aux.number(), var, n), nodal);
         }
       }
@@ -125,7 +149,14 @@ FETMeshTally::reconstruct(const libMesh::Elem * elem,
                           unsigned int local_score,
                           unsigned int ext_bin) const
 {
-  const int e = elem->id();
+  int e = elem->id();
+  if (_use_dof_map)
+  {
+    if (e >= static_cast<int>(_element_to_bin_mapping.size()) || _element_to_bin_mapping[e] == INVALID_TALLY_BIN)
+      return 0.0;
+    e = _element_to_bin_mapping[e];
+  }
+
   if (local_score >= _modal_values.size() || ext_bin >= _modal_values[local_score].size())
     mooseError("The tally results have not been stored yet; cannot reconstruct the expansion.");
   if (_mesh_fet_filter->element(e).n_modes() == 0)

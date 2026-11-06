@@ -64,6 +64,15 @@ public:
   virtual bool addingGlobalTally() const override { return _needs_global_tally && _instance == 0; }
 
 protected:
+  /// Build the maps between OpenMC mesh bins and MOOSE element IDs (adaptivity / block restriction).
+  virtual void buildDofMap(const libMesh::ReplicatedMesh & msh);
+
+  /// Whether the element-to-bin (dual) mapping is required
+  virtual bool needsElementToBinMap() const
+  {
+    return _is_adaptive && _relaxation_type != relaxation::none;
+  }
+
   /// Create the (not yet configured) OpenMC filter that spans the tally mesh. Override to tally with a different mesh filter type.
   virtual openmc::MeshFilter * createMeshFilter();
 
