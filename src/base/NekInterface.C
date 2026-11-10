@@ -78,6 +78,24 @@ setStartTime(const double & start)
   platform->options.setArgs("START TIME", to_string_f(start));
 }
 
+field::NekWriteEnum
+fluxToWriteField(const unsigned int scalar_id)
+{
+  if (scalar_id == 0)
+  {
+    enforceScalarZeroIsTemperature();
+    return field::heat_flux;
+  }
+  if (scalar_id == 1)
+    return field::scalar01_flux;
+  if (scalar_id == 2)
+    return field::scalar02_flux;
+  if (scalar_id == 3)
+    return field::scalar03_flux;
+
+  mooseError("Unhandled scalar index in fluxToWriteField!");
+}
+
 void
 write_usrwrk_field_file(const int & usrWriterSize,
                         const int & usrWriterIndex,
@@ -251,8 +269,17 @@ hasTemperatureSolve()
 }
 
 bool
+hasScalarSolve(const unsigned int scalar_id)
+{
+  return Nscalar() ? nrs->scalar->compute[scalar_id] : false;
+}
+
+bool
 hasScalarVariable(int scalarId)
 {
+  if (!nrs->Nscalar)
+    return false;
+
   if (hasTemperatureVariable())
     return scalarId < nrs->Nscalar;
   else
@@ -394,14 +421,23 @@ viscosity()
   return scales.rho_ref * scales.U_ref * scales.L_ref / Re;
 }
 
+void
+enforceScalarZeroIsTemperature()
+{
+  if (scalarName(0) != "temperature")
+    mooseError(firstPassiveScalarNamingError());
+}
+
 double
 Pr()
 {
-  dfloat rho, rho_cp, k;
+  dfloat rho, rho_cp;
   setupAide & options = platform->options;
   options.getArgs("FLUID DENSITY", rho);
   options.getArgs("SCALAR00 TRANSPORTCOEFF", rho_cp);
-  options.getArgs("SCALAR00 DIFFUSIONCOEFF", k);
+
+  enforceScalarZeroIsTemperature();
+  double k = scalarDiffusionCoeff(0);
 
   dfloat Pe = 1.0 / k;
   dfloat conductivity = scales.rho_ref * scales.U_ref * scales.Cp_ref * scales.L_ref / Pe;
@@ -1416,20 +1452,27 @@ pressureSurfaceForce(const std::vector<int> & boundary_id, const Point & directi
 }
 
 double
-heatFluxIntegral(const std::vector<int> & boundary_id, const nek_mesh::NekMeshEnum pp_mesh)
+scalarDiffusionCoeff(const unsigned int & scalar_id)
 {
-  mesh_t * mesh = getMesh(pp_mesh);
-
   // TODO: This function only works correctly if the conductivity is constant, because
   // otherwise we need to copy the conductivity from device to host
   double k;
-  platform->options.getArgs("SCALAR00 DIFFUSIONCOEFF", k);
+  platform->options.getArgs("SCALAR" + scalarDigitStr(scalar_id) + " DIFFUSIONCOEFF", k);
+  return k;
+}
+
+double
+diffusiveFluxIntegral(const std::vector<int> & boundary_id,
+                      const unsigned int & scalar_id,
+                      const nek_mesh::NekMeshEnum pp_mesh)
+{
+  mesh_t * mesh = getMesh(pp_mesh);
+  double k = scalarDiffusionCoeff(scalar_id);
 
   double integral = 0.0;
   double * grad_T = (double *)calloc(3 * mesh->Np, sizeof(double));
 
-  const auto sid = nrs->scalar->nameToIndex.find("temperature")->second;
-  const int offset = sid * scalarFieldOffset();
+  const int offset = scalar_id * scalarFieldOffset();
 
   for (int i = 0; i < mesh->Nelements; ++i)
   {
@@ -1471,7 +1514,7 @@ heatFluxIntegral(const std::vector<int> & boundary_id, const nek_mesh::NekMeshEn
   MPI_Allreduce(&integral, &total_integral, 1, MPI_DOUBLE, MPI_SUM, platform->comm.mpiComm());
 
   // multiply by the reference heat flux and an area factor to dimensionalize
-  total_integral *= scales.flux_ref * scales.A_ref;
+  total_integral *= nondimensionalDivisor(fluxToWriteField(scalar_id)) * scales.A_ref;
 
   return total_integral;
 }
@@ -1525,17 +1568,44 @@ gradient(const int offset,
   }
 }
 
-bool
-isHeatFluxBoundary(const int boundary)
+std::string
+onlyScalarName(const std::string object)
 {
-  auto sid = scalarDigitStr(nrs->scalar->nameToIndex.find("temperature")->second);
-  auto bcType = platform->app->bc->typeId(boundary, "scalar" + sid);
+  if (!nrs->Nscalar)
+    mooseError("There are no scalars in the NekRS problem, so we failed to identify a suitable "
+               "default for the 'scalar' parameter in " +
+               object + ".");
 
-  // the purpose of this function is to check if the user has a non-zero flux boundary
-  // condition so that if MOOSE sends data to NekRS it will actually be used (even
-  // though zeroNeumann is technically a heat flux condition, it would not indicate
-  // the user has set up their model correctly)
-  return bcType == bdryBase::bcType_udfNeumann;
+  if (Nscalar() > 1)
+    mooseError("There is more than one scalar in the NekRS problem, so we failed to identify a "
+               "default for the 'scalar' parameter in " +
+               object + ". Please specify 'scalar'.");
+
+  return scalarName(0);
+}
+
+std::string
+scalarName(const unsigned int & scalar_id)
+{
+  if (!hasScalarVariable(scalar_id))
+    mooseError("NekRS problem does not have a scalar with index ", scalar_id);
+
+  auto smap = nrs->scalar->nameToIndex;
+  for (auto it = smap.begin(); it != smap.end(); ++it)
+    if (it->second == scalar_id)
+      return it->first;
+
+  mooseError("internal error");
+}
+
+unsigned int
+scalarID(const std::string & name)
+{
+  if (nrs->scalar)
+    if (nrs->scalar->nameToIndex.count(name))
+      return nrs->scalar->nameToIndex.find(name)->second;
+
+  mooseError("The NekRS case files do not have a scalar by the name '" + name + "'.");
 }
 
 bool
@@ -1552,15 +1622,6 @@ isTemperatureBoundary(const int boundary)
 
   auto bcType = platform->app->bc->typeId(boundary, "scalar" + sid);
   return bcType == bdryBase::bcType_udfDirichlet;
-}
-
-const std::string
-temperatureBoundaryType(const int boundary)
-{
-  auto sid = scalarDigitStr(nrs->scalar->nameToIndex.find("temperature")->second);
-
-  auto bcType = platform->app->bc->typeId(boundary, "scalar" + sid);
-  return platform->app->bc->sBcIDToText.at(bcType);
 }
 
 int
@@ -1682,11 +1743,9 @@ get_temperature(const int id, const int surf_offset)
 }
 
 double
-get_flux(const int id, const int surf_offset)
+get_flux(const int sid, const int id, const int surf_offset)
 {
-  // TODO: this function does not support non-constant thermal conductivity
-  double k;
-  platform->options.getArgs("SCALAR00 DIFFUSIONCOEFF", k);
+  double k = scalarDiffusionCoeff(sid);
 
   // this call of nek_mesh::all should be fine because flux is not a 'field' which can be
   // provided to the postprocessors which have the option to operate only on part of the mesh
@@ -1694,7 +1753,6 @@ get_flux(const int id, const int surf_offset)
   int elem_id = id / mesh->Np;
   int vertex_id = id % mesh->Np;
 
-  const auto sid = nrs->scalar->nameToIndex.find("temperature")->second;
   const int offset = sid * scalarFieldOffset();
   // This function is slightly inefficient, because we compute grad(T) for all nodes in
   // an element even though we only call this function for one node at a time
@@ -1707,6 +1765,30 @@ get_flux(const int id, const int surf_offset)
   freePointer(grad_T);
 
   return -k * normal_grad_T;
+}
+
+double
+get_heat_flux(const int id, const int surf_offset)
+{
+  return get_flux(0, id, surf_offset);
+}
+
+double
+get_scalar01_flux(const int id, const int surf_offset)
+{
+  return get_flux(scalarSlot(1), id, surf_offset);
+}
+
+double
+get_scalar02_flux(const int id, const int surf_offset)
+{
+  return get_flux(scalarSlot(2), id, surf_offset);
+}
+
+double
+get_scalar03_flux(const int id, const int surf_offset)
+{
+  return get_flux(scalarSlot(3), id, surf_offset);
 }
 
 double
@@ -1773,20 +1855,72 @@ get_velocity_z_squared(const int id, const int surf_offset)
   return std::pow(get_velocity_z(id, surf_offset), 2);
 }
 
+std::string
+firstPassiveScalarNamingError()
+{
+  std::string s =
+      "Cardinal assumes that the temperature variable is the first passive scalar, which must be "
+      "named 'temperature' in the par file (i.e. in a [SCALAR TEMPERATURE] block).";
+  if (Nscalar() == 0)
+    s += " However, your par file does not have any passive scalars.";
+  else
+    s += " However, your first passive scalar is named '" + scalarName(0) + "'.";
+
+  return s;
+}
+
 void
 checkFieldValidity(const field::NekWriteEnum & field)
 {
   switch (field)
   {
-    case field::flux:
+    case field::heat_flux:
       if (!hasTemperatureVariable())
         mooseError("Cannot get NekRS heat flux "
-                   "because your Nek case files do not have a temperature variable!");
+                   "because your Nek case files do not have a temperature variable! " +
+                   firstPassiveScalarNamingError());
       break;
     case field::heat_source:
       if (!hasTemperatureVariable())
         mooseError("Cannot get NekRS heat source "
-                   "because your Nek case files do not have a temperature variable!");
+                   "because your Nek case files do not have a temperature variable! " +
+                   firstPassiveScalarNamingError());
+      break;
+    case field::scalar01_flux:
+      if (!hasScalarVariable(1))
+        mooseError("Cannot get NekRS scalar01 flux "
+                   "because your Nek case files do not have at least two scalars (the zeroth "
+                   "scalar is assumed to be temperature)");
+      break;
+    case field::scalar01_source:
+      if (!hasScalarVariable(1))
+        mooseError("Cannot get NekRS scalar01 volumetric source "
+                   "because your Nek case files do not have at least two scalars (the zeroth "
+                   "scalar is assumed to be temperature)");
+      break;
+    case field::scalar02_flux:
+      if (!hasScalarVariable(2))
+        mooseError("Cannot get NekRS scalar02 flux "
+                   "because your Nek case files do not have at least three scalars (the zeroth "
+                   "scalar is assumed to be temperature)");
+      break;
+    case field::scalar02_source:
+      if (!hasScalarVariable(2))
+        mooseError("Cannot get NekRS scalar02 volumetric source "
+                   "because your Nek case files do not have at least three scalars (the zeroth "
+                   "scalar is assumed to be temperature)");
+      break;
+    case field::scalar03_flux:
+      if (!hasScalarVariable(3))
+        mooseError("Cannot get NekRS scalar03 flux "
+                   "because your Nek case files do not have at least four scalars (the zeroth "
+                   "scalar is assumed to be temperature)");
+      break;
+    case field::scalar03_source:
+      if (!hasScalarVariable(3))
+        mooseError("Cannot get NekRS scalar03 volumetric source "
+                   "because your Nek case files do not have at least four scalars (the zeroth "
+                   "scalar is assumed to be temperature)");
       break;
     case field::x_displacement:
     case field::y_displacement:
@@ -1817,7 +1951,8 @@ checkFieldValidity(const field::NekFieldEnum & field)
     case field::temperature:
       if (!hasTemperatureVariable())
         mooseError("Cannot find 'temperature' "
-                   "because your Nek case files do not have a temperature variable!");
+                   "because your Nek case files do not have a temperature variable! " +
+                   firstPassiveScalarNamingError());
       break;
     case field::scalar01:
       if (!hasScalarVariable(1))
@@ -1860,8 +1995,17 @@ double (*solutionPointer(const field::NekWriteEnum & field))(int, int)
 
   switch (field)
   {
-    case field::flux:
-      f = &get_flux;
+    case field::heat_flux:
+      f = &get_heat_flux;
+      break;
+    case field::scalar01_flux:
+      f = &get_scalar01_flux;
+      break;
+    case field::scalar02_flux:
+      f = &get_scalar02_flux;
+      break;
+    case field::scalar03_flux:
+      f = &get_scalar03_flux;
       break;
     default:
       mooseError("Unhandled NekWriteEnum in solutionPointer!");
@@ -1949,6 +2093,9 @@ initializeDimensionalScales(const double U,
                             const double L,
                             const double rho,
                             const double Cp,
+                            const double transport_coeff_1,
+                            const double transport_coeff_2,
+                            const double transport_coeff_3,
                             const double s01,
                             const double ds01,
                             const double s02,
@@ -1964,6 +2111,9 @@ initializeDimensionalScales(const double U,
   scales.V_ref = L * L * L;
   scales.rho_ref = rho;
   scales.Cp_ref = Cp;
+  scales.transport_coeff_1_ref = transport_coeff_1;
+  scales.transport_coeff_2_ref = transport_coeff_2;
+  scales.transport_coeff_3_ref = transport_coeff_3;
   scales.t_ref = L / U;
   scales.P_ref = rho * U * U;
 
@@ -1974,8 +2124,15 @@ initializeDimensionalScales(const double U,
   scales.s03_ref = s03;
   scales.ds03_ref = ds03;
 
-  scales.flux_ref = rho * U * Cp * dT;
-  scales.source_ref = scales.flux_ref / L;
+  scales.heat_flux_ref = rho * U * Cp * dT;
+  scales.heat_source_ref = scales.heat_flux_ref / L;
+
+  scales.scalar01_flux_ref = transport_coeff_1 * U * ds01;
+  scales.scalar02_flux_ref = transport_coeff_2 * U * ds02;
+  scales.scalar03_flux_ref = transport_coeff_3 * U * ds03;
+  scales.scalar01_source_ref = scales.scalar01_flux_ref / L;
+  scales.scalar02_source_ref = scales.scalar02_flux_ref / L;
+  scales.scalar03_source_ref = scales.scalar03_flux_ref / L;
 }
 
 double
@@ -2025,8 +2182,14 @@ nondimensionalAdditive(const field::NekWriteEnum & field)
 {
   switch (field)
   {
-    case field::flux:
+    case field::heat_flux:
     case field::heat_source:
+    case field::scalar01_flux:
+    case field::scalar01_source:
+    case field::scalar02_flux:
+    case field::scalar02_source:
+    case field::scalar03_flux:
+    case field::scalar03_source:
     case field::x_displacement:
     case field::y_displacement:
     case field::z_displacement:
@@ -2044,10 +2207,22 @@ nondimensionalDivisor(const field::NekWriteEnum & field)
 {
   switch (field)
   {
-    case field::flux:
-      return scales.flux_ref;
+    case field::heat_flux:
+      return scales.heat_flux_ref;
     case field::heat_source:
-      return scales.source_ref;
+      return scales.heat_source_ref;
+    case field::scalar01_flux:
+      return scales.scalar01_flux_ref;
+    case field::scalar01_source:
+      return scales.scalar01_source_ref;
+    case field::scalar02_flux:
+      return scales.scalar02_flux_ref;
+    case field::scalar02_source:
+      return scales.scalar02_source_ref;
+    case field::scalar03_flux:
+      return scales.scalar03_flux_ref;
+    case field::scalar03_source:
+      return scales.scalar03_source_ref;
     case field::x_displacement:
     case field::y_displacement:
     case field::z_displacement:
@@ -2106,10 +2281,10 @@ nondimensionalDivisor(const field::NekFieldEnum & field)
 Real
 scratchUnits(const int slot)
 {
-  // if (indices.flux != -1 && slot == indices.flux / nekrs::fieldOffset())
-  //   return scales.flux_ref;
+  // if (indices.heat_flux != -1 && slot == indices.heat_flux / nekrs::fieldOffset())
+  //   return scales.heat_flux_ref;
   // else if (indices.heat_source != -1 && slot == indices.heat_source / nekrs::fieldOffset())
-  //   return scales.source_ref;
+  //   return scales.heat_source_ref;
   if (is_nondimensional)
   {
     mooseDoOnce(mooseWarning(
