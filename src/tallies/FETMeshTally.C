@@ -1,7 +1,8 @@
 #ifdef ENABLE_OPENMC_COUPLING
+#include <iostream>
+#include <eigen3/Eigen/src/Core/util/Meta.h>
 #include "FETMeshTally.h"
 #include "AuxiliarySystem.h"
-
 
 #include "openmc/fet/fet_element.h"
 
@@ -15,14 +16,17 @@ FETMeshTally::validParams()
       "A class which implements unstructured mesh tallies expanded in a functional expansion "
       "basis within each element. Only linear tetrahedral elements are supported.");
   params.addRequiredParam<int>("order", "Functional expansion order used on every element");
-  params.addParam<std::string>("family","L2_LAGRANGE", "Nodal element type to be stored on the mesh"
-                                                       "for visualization");
+  params.addParam<std::string>("family",
+                               "L2_LAGRANGE",
+                               "Nodal element type to be stored on the mesh"
+                               "for visualization");
   params.addParam<std::string>("nodal_variable_order", "SECOND", "Order of the nodal element type");
   return params;
 }
 
 FETMeshTally::FETMeshTally(const InputParameters & parameters)
-  : MeshTally(parameters), _order(getParam<int>("order")),
+  : MeshTally(parameters),
+    _order(getParam<int>("order")),
     _family(getParam<std::string>("family")),
     _nodal_variable_order(getParam<std::string>("nodal_variable_order"))
 {
@@ -32,7 +36,8 @@ FETMeshTally::FETMeshTally(const InputParameters & parameters)
                    std::to_string(openmc::fet::MAX_ORDER) + "!");
 
   // The nodal values are written with Elem::dof_number(), which is only valid for variables whose
-  // dofs live on the element (discontinuous families); continuous families would write out of bounds.
+  // dofs live on the element (discontinuous families); continuous families would write out of
+  // bounds.
   if (_family != "L2_LAGRANGE")
     paramError("family", "Functional expansion mesh tallies only support 'L2_LAGRANGE'!");
 
@@ -43,8 +48,6 @@ FETMeshTally::FETMeshTally(const InputParameters & parameters)
   if (_instance != 0)
     mooseError("Functional expansion mesh tallies do not support multiple mesh translations!");
 }
-
-
 
 openmc::MeshFilter *
 FETMeshTally::createMeshFilter()
@@ -76,9 +79,9 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
   Real factor = 1.0;
   if (norm_by_src_rate)
   {
-    factor = _openmc_problem.tallyMultiplier(_tally_score[local_score],
-                                             _local_mean_tally[local_score]) *
-             _openmc_problem.scaling() * _openmc_problem.scaling() * _openmc_problem.scaling();
+    factor =
+        _openmc_problem.tallyMultiplier(_tally_score[local_score], _local_mean_tally[local_score]) *
+        _openmc_problem.scaling() * _openmc_problem.scaling() * _openmc_problem.scaling();
 
     _modal_values.resize(_tally_score.size());
     _modal_values[local_score].assign(_num_ext_filter_bins, std::vector<Real>(n_bins, 0.0));
@@ -105,11 +108,8 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       std::vector<Real> values(n_modes);
       for (int i = 0; i < n_modes; ++i)
       {
-        // std::cout<<"mode index "<<i <<" modal values "<<
-        //   tally_vals[local_score](ext_bin * n_bins + first + i)<<std::endl;
         values[i] = tally_vals[local_score](ext_bin * n_bins + first + i) * factor;
       }
-
 
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : tally_vals[local_score](ext_bin * n_bins + first);
 
@@ -118,25 +118,28 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
       // the variable is a discontinuous linear Lagrange variable, so there is one dof per
       // vertex; evaluate the expansion at each vertex (the filter removes its translation
       // internally, so add it to the position, same as in reconstruct())
-      const auto * elem = _openmc_problem.getMooseMesh().queryElemPtr(_use_dof_map ? _bin_to_element_mapping[e] : e);
+
+      const auto * elem = _openmc_problem.getMooseMesh().queryElemPtr(
+          _use_dof_map ? _bin_to_element_mapping[e] : e);
       if (elem && _openmc_problem.isLocalElem(elem))
       {
         auto & solution = _aux.solution();
         for (unsigned int n = 0; n < elem->n_vertices(); ++n)
         {
           const auto r = elem->point(n) * _openmc_problem.scaling() + _mesh_translation;
-          const Real nodal = _mesh_fet_filter->reconstruct( e, openmc::Position(r(0), r(1), r(2)), values.data());
-          if (nodal <= 0)
-            std::cout << "NEG elem " << elem->id() << " bin " << e << " vertex " << n << " score "
-                      << local_score << " x: " << r(0) << " y: " << r(1) << " z: " << r(2)
-                      << " value = " << nodal << " mean = " << values[0] / _mesh_fet_filter->element(e).volume()
-                      << std::endl;
+          // I am thinking about doing a bounding box check here.
+          // just to ensure that I am not evaluating anything outside of the mesh or csg
+          // model
+
+          const Real nodal =
+              _mesh_fet_filter->reconstruct(e, openmc::Position(r(0), r(1), r(2)), values.data());
           solution.set(elem->dof_number(_aux.number(), var, n), nodal);
         }
       }
 
       if (norm_by_src_rate)
-        std::copy(values.begin(), values.end(), _modal_values[local_score][ext_bin].begin() + first);
+        std::copy(
+            values.begin(), values.end(), _modal_values[local_score][ext_bin].begin() + first);
     }
   }
 
@@ -152,7 +155,8 @@ FETMeshTally::reconstruct(const libMesh::Elem * elem,
   int e = elem->id();
   if (_use_dof_map)
   {
-    if (e >= static_cast<int>(_element_to_bin_mapping.size()) || _element_to_bin_mapping[e] == INVALID_TALLY_BIN)
+    if (e >= static_cast<int>(_element_to_bin_mapping.size()) ||
+        _element_to_bin_mapping[e] == INVALID_TALLY_BIN)
       return 0.0;
     e = _element_to_bin_mapping[e];
   }
@@ -165,10 +169,10 @@ FETMeshTally::reconstruct(const libMesh::Elem * elem,
   // positions in OpenMC are scaled; the filter removes its own translation internally, so add
   // it here (the same convention as checkMeshTemplateAndTranslations)
   const auto r = p * _openmc_problem.scaling() + _mesh_translation;
-  return _mesh_fet_filter->reconstruct(
-      e,
-      openmc::Position(r(0), r(1), r(2)),
-      _modal_values[local_score][ext_bin].data() + _mesh_fet_filter->offset(e));
+  return _mesh_fet_filter->reconstruct(e,
+                                       openmc::Position(r(0), r(1), r(2)),
+                                       _modal_values[local_score][ext_bin].data() +
+                                           _mesh_fet_filter->offset(e));
 }
 
 #endif
