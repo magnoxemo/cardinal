@@ -11,6 +11,7 @@
 # * OPENMC_DIR       : Top-level OpenMC dir (default: $(CONTRIB_DIR)/openmc)
 # * DAGMC_DIR        : Top-level DagMC dir (default: $(CONTRIB_DIR)/DAGMC)
 # * EMBREE_DIR       : Top-level Embree dir (default: $(CONTRIB_DIR)/embree)
+# * XDG_DIR          : Top-level XDG dir (default: $(CONTRIB_DIR)/xdg)
 # * DOUBLEDOWN_DIR   : Top-level Double-Down dir (default: $(CONTRIB_DIR)/double-down)
 # * MOAB_DIR         : Top-level Moab dir (default: $(CONTRIB_DIR)/moab)
 # * GRIFFIN_DIR      : Top-level Griffin dir (default: $(CONTRIB_DIR)/griffin)
@@ -39,13 +40,17 @@
 # ======================================================================================
 
 # Whether you want to build with NekRS
-ENABLE_NEK          ?= yes
+ENABLE_NEK          ?= no
 
 # Whether you want to build with OpenMC
 ENABLE_OPENMC       ?= yes
 
 # Whether you want to build OpenMC with DAGMC support
 ENABLE_DAGMC        ?= no
+
+# Whether you want to build OpenMC with XDG support (libMesh backend only; needed for
+# surface FET tallies). Builds contrib/xdg, which also requires Embree.
+ENABLE_XDG          ?= yes
 
 # Whether we want to use the double-precision interface to Embree for DAGMC
 # ray tracing instead of MOAB.
@@ -106,12 +111,12 @@ ALL_MODULES         := no
 # by third-party dependencies will be re-enabled if necessary
 FLUID_PROPERTIES    := yes
 HEAT_TRANSFER       := yes
-NAVIER_STOKES       := yes
-RAY_TRACING         := yes
+NAVIER_STOKES       := no
+RAY_TRACING         := no
 REACTOR             := yes
-SOLID_MECHANICS     := yes
-SOLID_PROPERTIES    := yes
-STOCHASTIC_TOOLS    := yes
+SOLID_MECHANICS     := no
+SOLID_PROPERTIES    := no
+STOCHASTIC_TOOLS    := no
 SUBCHANNEL          := yes
 THERMAL_HYDRAULICS  := yes
 
@@ -143,6 +148,9 @@ DOUBLEDOWN_INSTALL_DIR := $(CONTRIB_INSTALL_DIR)
 
 EMBREE_BUILDDIR := $(CARDINAL_DIR)/build/embree
 EMBREE_INSTALL_DIR := $(CONTRIB_INSTALL_DIR)
+
+XDG_BUILDDIR := $(CARDINAL_DIR)/build/xdg
+XDG_INSTALL_DIR := $(CONTRIB_INSTALL_DIR)
 
 MOAB_BUILDDIR := $(CARDINAL_DIR)/build/moab
 MOAB_INSTALL_DIR := $(CONTRIB_INSTALL_DIR)
@@ -292,12 +300,26 @@ DEP_APPS           := $(shell $(FRAMEWORK_DIR)/scripts/find_dep_apps.py $(APPLIC
 INSTALLABLE_DIRS   := test/tests->tests tutorials
 endif
 
+ifeq ($(ENABLE_XDG), yes)
+  ENABLE_XDG       := ON
+  include          $(CARDINAL_DIR)/config/embree.mk
+  include          $(CARDINAL_DIR)/config/xdg.mk
+else
+  ENABLE_XDG       := OFF
+
+build_xdg:
+	$(info Skipping XDG build because ENABLE_XDG is not set to 'yes')
+
+endif
+
 ifeq ($(ENABLE_DAGMC), yes)
   ENABLE_DAGMC     := ON
   include          $(CARDINAL_DIR)/config/moab.mk
 	ifeq ($(ENABLE_DOUBLE_DOWN), yes)
 		ENABLE_DOUBLE_DOWN := ON
-		include        $(CARDINAL_DIR)/config/embree.mk
+		ifneq ($(ENABLE_XDG), ON)
+			include        $(CARDINAL_DIR)/config/embree.mk
+		endif
 		include        $(CARDINAL_DIR)/config/double_down.mk
 	else
 		ENABLE_DOUBLE_DOWN := OFF
@@ -311,8 +333,10 @@ build_dagmc:
 build_doubledown:
 	$(info Skipping Double-Down build because ENABLE_DAGMC is not set to 'yes')
 
+ifneq ($(ENABLE_XDG), ON)
 build_embree:
-	$(info Skipping Embree build because ENABLE_DAGMC is not set to 'yes')
+	$(info Skipping Embree build because neither ENABLE_DAGMC (with Double-Down) nor ENABLE_XDG is set to 'yes')
+endif
 
 build_moab:
 	$(info Skipping MOAB build because ENABLE_DAGMC is not set to 'yes')
@@ -323,8 +347,10 @@ ifeq ($(ENABLE_DOUBLE_DOWN), OFF)
 build_doubledown: build_moab
 	$(info Skipping Double-Down build because ENABLE_DOUBLE_DOWN is not set to 'yes')
 
+ifneq ($(ENABLE_XDG), ON)
 build_embree:
 	$(info Skipping Embree build because ENABLE_DOUBLE_DOWN is not set to 'yes')
+endif
 endif
 
 # autoconf-archive puts some arguments (e.g. -std=c++17) into the compiler
@@ -369,6 +395,9 @@ endif
 
 ifeq ($(ENABLE_OPENMC), yes)
   ADDITIONAL_LIBS += -L$(OPENMC_LIBDIR) -lopenmc -lhdf5_hl
+  ifeq ($(ENABLE_XDG), ON)
+    ADDITIONAL_LIBS += -L$(XDG_INSTALL_DIR)/lib -lxdg -lembree4 $(CC_LINKER_SLFLAG)$(XDG_INSTALL_DIR)/lib
+  endif
   ifeq ($(ENABLE_DAGMC), ON)
     ADDITIONAL_LIBS += -ldagmc -lMOAB
 		ifeq ($(ENABLE_DOUBLE_DOWN), ON)
@@ -396,8 +425,8 @@ include            $(FRAMEWORK_DIR)/app.mk
 # guarantee these run first, without that side effect; genuine staleness from an
 # actual header/library change is already tracked separately, per file, via the
 # compiler-generated .d dependency files included above.
-$(app_objects): | build_nekrs build_moab build_embree build_doubledown build_dagmc build_openmc
-$(test_objects): | build_nekrs build_moab build_embree build_doubledown build_dagmc build_openmc
+$(app_objects): | build_nekrs build_moab build_embree build_doubledown build_dagmc build_xdg build_openmc
+$(test_objects): | build_nekrs build_moab build_embree build_doubledown build_dagmc build_xdg build_openmc
 
 CARDINAL_EXTERNAL_FLAGS := \
 	-L$(CARDINAL_DIR)/lib \
@@ -411,6 +440,9 @@ endif
 
 ifeq ($(ENABLE_OPENMC), yes)
   CARDINAL_EXTERNAL_FLAGS += -L$(OPENMC_LIBDIR) -L$(HDF5_LIBDIR) -lopenmc
+  ifeq ($(ENABLE_XDG), ON)
+    CARDINAL_EXTERNAL_FLAGS += -L$(XDG_INSTALL_DIR)/lib -lxdg -lembree4 $(CC_LINKER_SLFLAG)$(XDG_INSTALL_DIR)/lib
+  endif
   ifeq ($(ENABLE_DAGMC), ON)
     CARDINAL_EXTERNAL_FLAGS += -ldagmc -lMOAB
 		ifeq ($(ENABLE_DOUBLE_DOWN), ON)

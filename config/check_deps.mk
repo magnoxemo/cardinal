@@ -12,6 +12,7 @@ NUCLEARDATA_DIR     ?= $(CONTRIB_DIR)/nuclear_data
 DAGMC_DIR           ?= $(CONTRIB_DIR)/DAGMC
 DOUBLEDOWN_DIR      ?= $(CONTRIB_DIR)/double-down
 EMBREE_DIR          ?= $(CONTRIB_DIR)/embree
+XDG_DIR             ?= $(CONTRIB_DIR)/xdg
 MOAB_DIR            ?= $(CONTRIB_DIR)/moab
 GRIFFIN_DIR         ?= $(CONTRIB_DIR)/griffin
 BISON_DIR           ?= $(CONTRIB_DIR)/bison
@@ -33,6 +34,7 @@ NUCLEARDATA_CONTENT:= $(shell ls $(NUCLEARDATA_DIR) 2> /dev/null)
 DAGMC_CONTENT      := $(shell ls $(DAGMC_DIR) 2> /dev/null)
 DOUBLEDOWN_CONTENT := $(shell ls $(DOUBLEDOWN_DIR) 2> /dev/null)
 EMBREE_CONTENT     := $(shell ls $(EMBREE_DIR) 2> /dev/null)
+XDG_CONTENT       := $(shell ls $(XDG_DIR) 2> /dev/null)
 MOAB_CONTENT       := $(shell ls $(MOAB_DIR) 2> /dev/null)
 GRIFFIN_CONTENT    := $(shell ls $(GRIFFIN_DIR) 2> /dev/null)
 TMAP8_CONTENT      := $(shell ls $(TMAP8_DIR) 2> /dev/null)
@@ -49,6 +51,9 @@ ifeq ($(ENABLE_OPENMC),$(filter $(ENABLE_OPENMC), true yes on 1 TRUE YES ON))
 endif
 ifeq ($(ENABLE_NEK),$(filter $(ENABLE_NEK), true yes on 1 TRUE YES ON))
   ENABLE_NEK := yes
+endif
+ifeq ($(ENABLE_XDG),$(filter $(ENABLE_XDG), true yes on 1 TRUE YES ON))
+  ENABLE_XDG := yes
 endif
 ifeq ($(ENABLE_DOUBLE_DOWN),$(filter $(ENABLE_DOUBLE_DOWN), true yes on 1 TRUE YES ON))
   ENABLE_DOUBLE_DOWN := yes
@@ -67,6 +72,24 @@ else
   ifeq ($(ENABLE_DAGMC), yes)
     $(info Ignoring ENABLE_DAGMC because OpenMC is not enabled.)
     ENABLE_DAGMC := no
+  endif
+endif
+
+ifeq ($(ENABLE_OPENMC), yes)
+  ifeq ($(ENABLE_XDG), yes)
+    ifeq ($(XDG_CONTENT),)
+      $(error $n"XDG does not seem to be available, but ENABLE_XDG is enabled. Make sure that the submodule is checked out.$n$nTo fetch the XDG submodule, use ./scripts/get-dependencies.sh")
+    else
+      $(info Cardinal is using XDG from             $(XDG_DIR))
+    endif
+    ifeq ($(EMBREE_CONTENT),)
+      $(error $n"Embree does not seem to be available, but ENABLE_XDG is enabled. Make sure that the submodule is checked out.$n$nTo fetch the Embree submodule, use ./scripts/get-dependencies.sh")
+    endif
+  endif
+else
+  ifeq ($(ENABLE_XDG), yes)
+    $(info Ignoring ENABLE_XDG because OpenMC is not enabled.)
+    ENABLE_XDG := no
   endif
 endif
 
