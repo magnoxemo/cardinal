@@ -12,7 +12,7 @@
  * can be evaluated at arbitrary points on a facet with reconstruct().
  *
  * The expansion is evaluated at the vertices of each facet and written into a discontinuous
- * (L2_LAGRANGE) auxvariable on the MOOSE element owning the facet, using a facet-to-(element,
+ * (L2_LAGRANGE) aux variable on the MOOSE element owning the facet, using a facet-to-(element,
  * side) map built by matching facet and side centroids.
  */
 class FETSurfaceTally : public TallyBase
@@ -85,6 +85,7 @@ protected:
   const std::vector<int32_t> _surface_ids;
 
   /// Expansion order on every facet
+  /// TODO: change that in the future
   const int _order;
 
   /// The OpenMC surface FET filter
@@ -92,6 +93,17 @@ protected:
 
   /// Modal values, indexed by [local score][ext bin][filter bin]
   std::vector<std::vector<std::vector<Real>>> _modal_values;
+
+  /// Evaluate the expansion on a facet from the modal values of that facet
+  /// in @facet face id
+  /// in @p point on which the tally is going to be evaluated
+  /// in @values modal coefficients
+  /// return tally evaluated at a point p
+  Real expansion(int facet, const libMesh::Point & p, const Real * values) const;
+
+  /// Standard deviation of the expansion from modal standard deviations, in quadrature
+  /// (diagonal approximation: the covariance between modes is neglected)
+  Real expansionStdDev(int facet, const libMesh::Point & p, const Real * sigmas) const;
 
   /// MOOSE element and side of each facet, in the facet order of the filter
   std::vector<FacetSide> _facet_sides;

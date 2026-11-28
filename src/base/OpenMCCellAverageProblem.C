@@ -2706,7 +2706,8 @@ OpenMCCellAverageProblem::tallyMultiplier(const std::string & score_name,
         score_name == "decay-rate" || score_name == "damage-energy")
       return source;
 
-    if (score_name == "flux")
+    // 'current' (surface tallies only) has the same dimensions as the flux
+    if (score_name == "flux" || score_name == "current")
       return source / _scaling;
     else
       mooseError("Unhandled tally score enum!");

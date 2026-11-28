@@ -53,6 +53,16 @@ protected:
                                  const std::vector<OMCTensor> & tally_vals,
                                  bool norm_by_src_rate = true) override;
 
+  /**
+   * Standard deviation of the expansion at a point from the modal standard deviations, in
+   * quadrature. I presume that Gramm tensor is diagonal which will not be the case
+   * for folks who are going to deal with NOFET. But For now OFET is presumed.
+   * @param[in] e filter element index
+   * @param[in] r position in OpenMC coordinates
+   * @param[in] sigmas modal standard deviations of the element's bins
+   */
+  Real quadratureStdDev(int e, const openmc::Position & r, const Real * sigmas) const;
+
   /// Expansion order on every element
   /// This doesn't need to be uniform. Ig my future work is gonna be figuring out how to
   /// not make this uniform

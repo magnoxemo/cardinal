@@ -33,12 +33,20 @@ private:
   /// Evaluate the tally of source problem i_from at a point in that app's frame
   Real evaluateTally(const unsigned int i_from, const Point & p) const;
 
+  /**
+   * Index of the surface tally facet closest to a point, or -1 if no facet is within
+   * 'surface_distance_tolerance'. On success, p_facet is the closest point on that facet.
+   */
+  int closestFacet(const unsigned int i_from, const Point & p, Point & p_facet) const;
+
   /// Name of the FET tally object in the OpenMCCellAverageProblem
   const std::string _tally_name;
   /// Name of the score to transfer
   const std::string _score;
   /// External filter bin (0 if the tally has no external filters)
   const unsigned int _ext_bin;
+  /// Maximum distance between a target point and a tallied surface
+  const Real _surface_tol;
   /// Index of the score within the tally; resolved when preparing the evaluation
   unsigned int _local_score = 0;
 

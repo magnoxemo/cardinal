@@ -66,12 +66,37 @@ FETMeshTally::configureMeshFilter()
 }
 
 Real
+FETMeshTally::quadratureStdDev(int e, const openmc::Position & r, const Real * sigmas) const
+{
+  // f(r) = sum_i c_i a_i psi_i(r) with c_i = N_i^2 / volume, so, neglecting the covariance between
+  // modes (OpenMC only stores Var(a_i)), Var f(r) = sum_i (c_i psi_i(r) sigma_i)^2.
+  const auto & fet_element = _mesh_fet_filter->element(e);
+  double psi[openmc::fet::MAX_MODES];
+  const int n = _mesh_fet_filter->evaluate_basis(e, r, psi);
+
+  Real variance = 0.0;
+  for (int i = 0; i < n; ++i)
+  {
+    const Real term = fet_element.mode_norm_sq(i) / fet_element.volume() * psi[i] * sigmas[i];
+    variance += term * term;
+  }
+  return std::sqrt(variance);
+}
+
+Real
 FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
                                 unsigned int local_score,
                                 const std::vector<OMCTensor> & tally_vals,
                                 bool norm_by_src_rate)
 {
   Real total = 0.0;
+
+  // The uncertainty outputs are not tallies of a modal expansion: the standard deviation of the
+  // field is combined from the modal standard deviations in quadrature (diagonal approximation, the
+  // covariance between modes is neglected), and the relative error is that over the field
+  // value, both evaluated at each vertex. They must not overwrite the cached modal values.
+  const bool is_std_dev = &tally_vals == &_current_raw_tally_std_dev;
+  const bool is_rel_error = &tally_vals == &_current_raw_tally_rel_error;
 
   const auto n_bins = _mesh_fet_filter->n_bins();
   const auto n_elem = _mesh_fet_filter->n_elements();
@@ -83,8 +108,11 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
         _openmc_problem.tallyMultiplier(_tally_score[local_score], _local_mean_tally[local_score]) *
         _openmc_problem.scaling() * _openmc_problem.scaling() * _openmc_problem.scaling();
 
-    _modal_values.resize(_tally_score.size());
-    _modal_values[local_score].assign(_num_ext_filter_bins, std::vector<Real>(n_bins, 0.0));
+    if (!is_std_dev)
+    {
+      _modal_values.resize(_tally_score.size());
+      _modal_values[local_score].assign(_num_ext_filter_bins, std::vector<Real>(n_bins, 0.0));
+    }
   }
 
   for (unsigned int ext_bin = 0; ext_bin < _num_ext_filter_bins; ++ext_bin)
@@ -111,6 +139,34 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
         values[i] = tally_vals[local_score](ext_bin * n_bins + first + i) * factor;
       }
 
+      // The uncertainty outputs need the unrelaxed modal means (to decide whether the field is
+      // clipped, and for the relative error) and the modal standard deviations.
+      std::vector<Real> sigmas, means, means0, sigmas0;
+      if (is_std_dev || is_rel_error)
+      {
+        sigmas.resize(n_modes);
+        means.resize(n_modes);
+        for (int i = 0; i < n_modes; ++i)
+        {
+          sigmas[i] = _current_raw_tally_std_dev[local_score](ext_bin * n_bins + first + i);
+          means[i] = _current_raw_tally[local_score](ext_bin * n_bins + first + i);
+        }
+
+        // zeroth-order (constant) fallback, used where the expansion is negative
+        means0.assign(n_modes, 0.0);
+        sigmas0.assign(n_modes, 0.0);
+        means0[0] = means[0];
+        sigmas0[0] = sigmas[0];
+      }
+
+      // zeroth-order fallback of the stored expansion, only the first mode is kept
+      std::vector<Real> values0;
+      if (!is_std_dev && !is_rel_error)
+      {
+        values0.assign(n_modes, 0.0);
+        values0[0] = values[0];
+      }
+
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : tally_vals[local_score](ext_bin * n_bins + first);
 
       auto var = var_numbers[_num_ext_filter_bins * local_score + ext_bin];
@@ -131,13 +187,37 @@ FETMeshTally::storeResultsInner(const std::vector<unsigned int> & var_numbers,
           // just to ensure that I am not evaluating anything outside of the mesh or csg
           // model
 
-          const Real nodal =
-              _mesh_fet_filter->reconstruct(e, openmc::Position(r(0), r(1), r(2)), values.data());
+          const openmc::Position pos(r(0), r(1), r(2));
+          Real nodal;
+          if (is_std_dev || is_rel_error)
+          {
+            // Where the expansion is negative the field written for the mean falls back to the
+            // zeroth-order mode, so the uncertainty uses only the zeroth-order mode there as well.
+            Real mean = _mesh_fet_filter->reconstruct(e, pos, means.data());
+            const bool clipped = mean < 0;
+            if (clipped)
+              mean = _mesh_fet_filter->reconstruct(e, pos, means0.data());
+
+            const Real std_dev = quadratureStdDev(e, pos, clipped ? sigmas0.data() : sigmas.data());
+            if (is_std_dev)
+              nodal = std_dev * factor;
+            else
+              nodal = std::abs(mean) < ZERO_TALLY_THRESHOLD ? 0.0 : std_dev / std::abs(mean);
+          }
+          else
+          {
+            nodal = _mesh_fet_filter->reconstruct(e, pos, values.data());
+
+            // fall back to the zeroth-order (constant) value where the expansion is negative
+            if (nodal < 0)
+              nodal = _mesh_fet_filter->reconstruct(e, pos, values0.data());
+          }
+
           solution.set(elem->dof_number(_aux.number(), var, n), nodal);
         }
       }
 
-      if (norm_by_src_rate)
+      if (norm_by_src_rate && !is_std_dev)
         std::copy(
             values.begin(), values.end(), _modal_values[local_score][ext_bin].begin() + first);
     }

@@ -56,10 +56,12 @@ FETSurfaceTally::FETSurfaceTally(const InputParameters & parameters)
   if (_is_adaptive)
     mooseError("Surface FET tallies do not support adaptivity!");
 
-  // OpenMC only scores 'flux' (surface-crossing flux) or 'current' on a surface filter
+  // OpenMC only scores 'flux' (surface-crossing flux) or 'current' on a surface filter. The
+  // current is the net current: each crossing is signed by the sign of the dot product of the
+  // particle direction and the surface normal.
   for (const auto & score : _tally_score)
-    if (score != "flux")
-      paramError("score", "Surface FET tallies only support the 'flux' score!");
+    if (score != "flux" && score != "current")
+      paramError("score", "Surface FET tallies only support the 'flux' and 'current' scores!");
 
   // Surface crossings are scored by the analog estimator.
   if (isParamValid("estimator"))
@@ -233,8 +235,19 @@ FETSurfaceTally::storeResultsInner(const std::vector<unsigned int> & var_numbers
                                              _local_mean_tally[local_score]) *
              _openmc_problem.scaling() * _openmc_problem.scaling();
 
-  _modal_values.resize(_tally_score.size());
-  _modal_values[local_score].assign(_num_ext_filter_bins, std::vector<Real>(n_bins, 0.0));
+  // The uncertainty outputs are not tallies of a modal expansion: the standard deviation of the
+  // field is combined from the modal standard deviations in quadrature (diagonal approximation,
+  // the covariance between modes is neglected), and the relative error is that over the field
+  // value. They must not overwrite the cached modal values used by reconstruct().
+  const bool is_std_dev = &tally_vals == &_current_raw_tally_std_dev;
+  const bool is_rel_error = &tally_vals == &_current_raw_tally_rel_error;
+  const bool is_uncertainty = is_std_dev || is_rel_error;
+
+  // modal values (or, for the uncertainty outputs, unscaled standard deviations) by [ext bin][bin]
+  std::vector<std::vector<Real>> modal(_num_ext_filter_bins, std::vector<Real>(n_bins, 0.0));
+  std::vector<std::vector<Real>> raw_means;
+  if (is_uncertainty)
+    raw_means.assign(_num_ext_filter_bins, std::vector<Real>(n_bins, 0.0));
 
   for (unsigned int ext_bin = 0; ext_bin < _num_ext_filter_bins; ++ext_bin)
   {
@@ -246,10 +259,25 @@ FETSurfaceTally::storeResultsInner(const std::vector<unsigned int> & var_numbers
         continue;
 
       for (int i = 0; i < n_modes; ++i)
-        _modal_values[local_score][ext_bin][first + i] = tally_vals[local_score](ext_bin * n_bins + first + i) * factor;
+      {
+        const auto idx = ext_bin * n_bins + first + i;
+        if (is_uncertainty)
+        {
+          modal[ext_bin][first + i] = _current_raw_tally_std_dev[local_score](idx);
+          raw_means[ext_bin][first + i] = _current_raw_tally[local_score](idx);
+        }
+        else
+          modal[ext_bin][first + i] = tally_vals[local_score](idx) * factor;
+      }
 
       total += _ext_bins_to_skip[ext_bin] ? 0.0 : tally_vals[local_score](ext_bin * n_bins + first);
     }
+  }
+
+  if (!is_uncertainty)
+  {
+    _modal_values.resize(_tally_score.size());
+    _modal_values[local_score] = modal;
   }
 
   // Write the expansion into the discontinuous variable: the value at each vertex of a facet is
@@ -274,7 +302,21 @@ FETSurfaceTally::storeResultsInner(const std::vector<unsigned int> & var_numbers
         const unsigned int local_node = elem->get_node_index(side->node_ptr(n));
         const auto dof = elem->dof_number(_aux.number(), var, local_node);
         auto & entry = dofs[dof];
-        entry.first += reconstruct(e, *side->node_ptr(n), local_score, ext_bin);
+
+        if (is_uncertainty)
+        {
+          const auto offset = _surface_fet_filter->offset(e);
+          const Real std_dev = expansionStdDev(e, *side->node_ptr(n), modal[ext_bin].data() + offset);
+          if (is_std_dev)
+            entry.first += std_dev * factor;
+          else
+          {
+            const Real mean = expansion(e, *side->node_ptr(n), raw_means[ext_bin].data() + offset);
+            entry.first += std::abs(mean) < ZERO_TALLY_THRESHOLD ? 0.0 : std_dev / std::abs(mean);
+          }
+        }
+        else
+          entry.first += reconstruct(e, *side->node_ptr(n), local_score, ext_bin);
         entry.second++;
       }
     }
@@ -284,6 +326,37 @@ FETSurfaceTally::storeResultsInner(const std::vector<unsigned int> & var_numbers
   }
 
   return total;
+}
+
+Real
+FETSurfaceTally::expansion(int facet, const libMesh::Point & p, const Real * values) const
+{
+  const auto r = p * _openmc_problem.scaling();
+
+  // f(r) = sum_i N_i^2 * (tally_i) * P_i(r) / area. The expansion functions P_i are not always the
+  // functions OpenMC scores (they differ on quadrilaterals), so let the element do the sum.
+  return _surface_fet_filter->element(facet).reconstruct(
+      openmc::Position(r(0), r(1), r(2)), values);
+}
+
+Real
+FETSurfaceTally::expansionStdDev(int facet, const libMesh::Point & p, const Real * sigmas) const
+{
+  const auto & element = _surface_fet_filter->element(facet);
+  const auto r = p * _openmc_problem.scaling();
+
+  // Var f(r) = sum_i (N_i^2 P_i(r) sigma_i / area)^2, neglecting the covariance between modes.
+  // Each term is the expansion with only that mode's moment set to its standard deviation.
+  std::vector<Real> single(element.n_modes(), 0.0);
+  Real variance = 0.0;
+  for (int i = 0; i < element.n_modes(); ++i)
+  {
+    single[i] = sigmas[i];
+    const Real term = element.reconstruct(openmc::Position(r(0), r(1), r(2)), single.data());
+    single[i] = 0.0;
+    variance += term * term;
+  }
+  return std::sqrt(variance);
 }
 
 Real
@@ -298,21 +371,7 @@ FETSurfaceTally::reconstruct(int facet,
   if (facet < 0 || facet >= _surface_fet_filter->n_elements())
     mooseError("Facet index ", facet, " is out of range for the surface FET tally.");
 
-  const auto & element = _surface_fet_filter->element(facet);
-  if (element.n_modes() == 0)
-    return 0.0;
-
-  const auto r = p * _openmc_problem.scaling();
-
-  // f(r) = sum_i N_i^2 * (tally_i) * psi_i(r) / area
-  double psi[openmc::fet::MAX_MODES];
-  const int n = element.eval(openmc::Position(r(0), r(1), r(2)), psi);
-  const Real * values = _modal_values[local_score][ext_bin].data() + _surface_fet_filter->offset(facet);
-
-  Real f = 0.0;
-  for (int i = 0; i < n; ++i)
-    f += element.mode_norm_sq(i) * values[i] * psi[i];
-  return f / element.volume();
+  return expansion(facet, p, _modal_values[local_score][ext_bin].data() + _surface_fet_filter->offset(facet));
 }
 
 #endif

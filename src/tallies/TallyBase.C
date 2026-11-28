@@ -141,6 +141,10 @@ TallyBase::TallyBase(const InputParameters & parameters)
   else
     _tally_score = {"kappa-fission"};
 
+  if (std::find(_tally_score.begin(), _tally_score.end(), "current") != _tally_score.end() &&
+      std::string(type()) != "FETSurfaceTally")
+    paramError("score", "The 'current' score is only supported by surface tallies (FETSurfaceTally)!");
+
   if (_openmc_problem.runRandomRay())
   {
     const auto has_flux =

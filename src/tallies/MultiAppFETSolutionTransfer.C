@@ -20,6 +20,15 @@ MultiAppFETSolutionTransfer::validParams()
   params.addRequiredParam<std::string>("score", "Score of the tally to transfer, e.g. kappa_fission");
   params.addParam<unsigned int>(
       "ext_bin", 0, "External filter bin; only needed if the tally has external filters");
+
+  params.addRangeCheckedParam<Real>(
+      "surface_distance_tolerance",
+      libMesh::TOLERANCE,
+      "surface_distance_tolerance>=0",
+      "Surface tallies only: target points within this distance of a tallied facet are projected "
+      "onto the closest facet. Increase it for target meshes which only approximate the surface, "
+      "e.g. a smooth sphere around a faceted one.");
+
   // The source is a tally, not a variable
   params.suppressParameter<std::vector<VariableName>>("source_variable");
   params.suppressParameter<std::vector<unsigned int>>("source_variable_components");
@@ -28,11 +37,12 @@ MultiAppFETSolutionTransfer::validParams()
   return params;
 }
 
-MultiAppFETSolutionTransfer::MultiAppFETSolutionTransfer(const InputParameters & parameters)
+MultiAppFETSolutionTransfer::MultiAppFETSolutionTransfer(const InputParameters & parameters) noexcept(false)
   : MultiAppGeneralFieldTransfer(parameters),
     _tally_name(getParam<std::string>("fet_tally_object")),
     _score(getParam<std::string>("score")),
-    _ext_bin(getParam<unsigned int>("ext_bin"))
+    _ext_bin(getParam<unsigned int>("ext_bin")),
+    _surface_tol(getParam<Real>("surface_distance_tolerance"))
 {
   if (_to_var_names.size() != 1)
     paramError("variable", "Exactly one target variable is supported");
@@ -85,25 +95,84 @@ MultiAppFETSolutionTransfer::prepareEvaluationOfInterpValues(const unsigned int 
   }
 }
 
+namespace
+{
+/// Closest point to p on the segment (a, b)
+Point
+closestOnSegment(const Point & p, const Point & a, const Point & b)
+{
+  const Point ab = b - a;
+  const Real t = std::max(0.0, std::min(1.0, ((p - a) * ab) / ab.norm_sq()));
+  return a + ab * t;
+}
+
+/// Closest point to p on the triangle (a, b, c)
+Point
+closestOnTriangle(const Point & p, const Point & a, const Point & b, const Point & c)
+{
+  const Point n = (b - a).cross(c - a);
+  const Point q = p - n * (((p - a) * n) / n.norm_sq());
+
+  // the projection onto the plane is the answer if it lies inside all three edges
+  if ((b - a).cross(q - a) * n >= 0 && (c - b).cross(q - b) * n >= 0 &&
+      (a - c).cross(q - c) * n >= 0)
+    return q;
+
+  Point best = closestOnSegment(p, a, b);
+  for (const auto & candidate : {closestOnSegment(p, b, c), closestOnSegment(p, c, a)})
+    if ((candidate - p).norm_sq() < (best - p).norm_sq())
+      best = candidate;
+  return best;
+}
+}
+
+int
+MultiAppFETSolutionTransfer::closestFacet(const unsigned int i_from,
+                                          const Point & p,
+                                          Point & p_facet) const
+{
+  const auto & mesh = _from_problems[i_from]->mesh();
+  const auto & fs = _surface_tallies[i_from]->facetSides();
+
+  int facet = -1;
+  Real best = _surface_tol;
+  for (const auto f : index_range(fs))
+  {
+    const auto side = mesh.getMesh().elem_ptr(fs[f].elem_id)->side_ptr(fs[f].side);
+    // triangles, and (planar) quadrilaterals split into the triangles (0, 1, 2) and (0, 2, 3)
+    for (unsigned int v = 2; v < side->n_vertices(); ++v)
+    {
+      const auto q =
+          closestOnTriangle(p, side->point(0), side->point(v - 1), side->point(v));
+      const Real distance = (q - p).norm();
+      if (distance <= best)
+      {
+        best = distance;
+        facet = f;
+        p_facet = q;
+      }
+    }
+  }
+  return facet;
+}
+
 Real
 MultiAppFETSolutionTransfer::evaluateTally(const unsigned int i_from, const Point & p) const
 {
-  const auto * elem = (*_point_locators[i_from])(p);
-  if (!elem)
+  if (_mesh_tallies[i_from])
+  {
+    const auto * elem = (*_point_locators[i_from])(p);
+    if (!elem)
+      return GeneralFieldTransfer::OutOfMeshValue;
+    return _mesh_tallies[i_from]->reconstruct(elem, p, _local_score, _ext_bin);
+  }
+
+  Point p_facet;
+  const int facet = closestFacet(i_from, p, p_facet);
+  if (facet < 0)
     return GeneralFieldTransfer::OutOfMeshValue;
 
-  if (_mesh_tallies[i_from])
-    return _mesh_tallies[i_from]->reconstruct(elem, p, _local_score, _ext_bin);
-
-  // surface tally: find the facet whose (element, side) contains the point
-  const auto * tally = _surface_tallies[i_from];
-  const auto & fs = tally->facetSides();
-  for (const auto f : index_range(fs))
-    if (fs[f].elem_id == elem->id() &&
-        elem->side_ptr(fs[f].side)->close_to_point(p, libMesh::TOLERANCE))
-      return tally->reconstruct(f, p, _local_score, _ext_bin);
-
-  return GeneralFieldTransfer::OutOfMeshValue;
+  return _surface_tallies[i_from]->reconstruct(facet, p_facet, _local_score, _ext_bin);
 }
 
 void
